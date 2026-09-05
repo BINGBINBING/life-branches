@@ -1,0 +1,15 @@
+.DS_Store
+.env
+.env.*
+*.pem
+*.key
+*.tsbuildinfo
+.local/
+node_modules/
+dist/
+.next/
+.vinext/
+.wrangler/
+coverage/
+# Machine-specific temporary tunnel details.
+/临时展示记录.md
