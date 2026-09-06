@@ -4,6 +4,7 @@ import { homedir, platform } from 'node:os';
 import { win32, posix } from 'node:path';
 import { existsSync } from 'node:fs';
 import { analysisProvider, deepseekJSON } from './deepseek.mjs';
+import { getCachedSearch, putCachedSearch } from './storage.mjs';
 
 const exec = promisify(execFile);
 
@@ -280,10 +281,21 @@ export async function search(profile, progress, onSources = () => {}) {
     progress(`正在检索${results.length ? '受挫经历' : '行动与成果'}…`);
     let data = cache.get(query);
     if (!data || Date.now() - data.at > 3600000) {
-      data = {
-        at: Date.now(),
-        data: await cli(['search', 'zhihu', '--query', query, '--count', '5']),
-      };
+      // 二级：持久缓存（磁盘，跨进程/重启，24h TTL；过期项在 storage 内视为未命中）
+      data = await getCachedSearch(query);
+      if (data) data = { at: Date.now(), data: data.data }; // 刷新热缓存基准时间
+      if (!data) {
+        // 三级：真实调用知乎，成功后写入内存与磁盘
+        data = {
+          at: Date.now(),
+          data: await cli(['search', 'zhihu', '--query', query, '--count', '5']),
+        };
+        try {
+          await putCachedSearch(query, data);
+        } catch {
+          // 写盘失败不影响本次结果。
+        }
+      }
       if (cache.size >= 40) cache.delete(cache.keys().next().value);
       cache.set(query, data);
     }
