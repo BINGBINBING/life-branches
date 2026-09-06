@@ -1,7 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { analyze, search, validProfile, cli } from './engine.mjs';
+import {
+  analyze,
+  search,
+  validProfile,
+  cli,
+  setTempCredential,
+  summaryCredentialStatus,
+} from './engine.mjs';
 import { curatedArchive } from './archive-annotations.mjs';
 import { analysisProvider, requiredQuotaIds } from './deepseek.mjs';
 
@@ -119,6 +126,34 @@ export function localApi() {
             if (!job || Date.now() - job.createdAt > 3600000)
               return send(res, 404, { error: '这次探索已过期，请重新搜索。' });
             return send(res, 200, job);
+          }
+          if (req.method === 'GET' && url.pathname === '/api/branches/settings') {
+            return send(res, 200, {
+              provider: analysisProvider(),
+              devOverride: summaryCredentialStatus(), // 脱敏；不返回完整 key
+            });
+          }
+          if (
+            req.method === 'POST' &&
+            url.pathname === '/api/branches/keys'
+          ) {
+            try {
+              const input = await body(req);
+              // 仅开发期：type 取 zhihu|ai；value 为空则清除该项。
+              const kind = input?.type;
+              if (kind !== 'zhihu' && kind !== 'ai')
+                return send(res, 400, { error: 'kind 只能为 zhihu 或 ai。' });
+              const value =
+                typeof input?.value === 'string' && input.value.trim()
+                  ? input.value.trim()
+                  : null;
+              if (value && value.length > 4096)
+                return send(res, 400, { error: '密钥过长。' });
+              const masked = setTempCredential(kind, value); // 不落盘/不打日志
+              return send(res, 200, { ok: true, devOverride: masked });
+            } catch (e) {
+              return send(res, 400, { error: e.message || '设置失败。' });
+            }
           }
           if (req.method !== 'POST' || url.pathname !== '/api/branches/explore')
             return send(res, 404, { error: '未找到请求。' });

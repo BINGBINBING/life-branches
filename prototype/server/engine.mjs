@@ -8,6 +8,7 @@ import { analysisProvider, deepseekJSON } from './deepseek.mjs';
 const exec = promisify(execFile);
 
 // zhihu-cli 可执行文件路径：可被环境变量覆盖；否则按当前平台探测常见安装位置。
+// 支持 ZHIHU_CLI_HOME / ZHIHU_CLI_PATH，并通过参数注入便于隔离测试。
 export function resolveCliBinary({
   env = process.env,
   os = platform(),
@@ -44,6 +45,42 @@ export function resolveCliBinary({
 
 const binary = resolveCliBinary();
 const cache = new Map();
+
+// ---- 开发期临时凭证覆盖（仅内存，进程结束即失效；绝不写盘/日志） ----
+const tempOverrides = { zhihuSecret: null, aiKey: null };
+
+/** 开发状态临时注入某类 key；传 undefined/null 意为清除该项。返回脱敏摘要供界面回读。 */
+export function setTempCredential(kind, value) {
+  const key =
+    kind === 'zhihu' || kind === 'zhihuSecret'
+      ? 'zhihuSecret'
+      : kind === 'ai' || kind === 'aiKey'
+        ? 'aiKey'
+        : null;
+  if (!key) throw new Error('未知的凭证类型。');
+  if (value == null || value === '') tempOverrides[key] = null;
+  else tempOverrides[key] = String(value).trim();
+  if (!tempOverrides[key]) tempOverrides[key] = null;
+  return summarizeTempCredentials();
+}
+
+export function summaryCredentialStatus() {
+  return summarizeTempCredentials();
+}
+
+function summarizeTempCredentials() {
+  return {
+    zhihu: tempOverrides.zhihuSecret ? setActiveLabel(tempOverrides.zhihuSecret) : null,
+    ai: tempOverrides.aiKey ? setActiveLabel(tempOverrides.aiKey) : null,
+  };
+}
+
+// 仅做脱敏前缀展示，不回显完整密钥。
+function setActiveLabel(value) {
+  const s = String(value || '');
+  return s.length > 6 ? `${s.slice(0, 3)}…${s.slice(-3)}` : '•••';
+}
+
 let nextRequestAt = 0;
 let queue = Promise.resolve();
 const clean = (value) =>
@@ -61,7 +98,14 @@ export async function cli(args) {
   queue = turn.catch(() => {});
   await turn;
   try {
+    // 仅当开发态设置了临时知乎 secret 时，才把它注入子进程 env；
+    // 否则让 CLI 走它自己的 keychain/既有环境变量（保持向后兼容）。
+    const execEnv =
+      tempOverrides.zhihuSecret != null
+        ? { ...process.env, ZHIHU_ACCESS_SECRET: tempOverrides.zhihuSecret }
+        : process.env;
     const { stdout } = await exec(binary, args, {
+      env: execEnv,
       timeout: 155000,
       maxBuffer: 4 * 1024 * 1024,
     });
@@ -83,11 +127,12 @@ export async function cli(args) {
       reason = detail.Code ?? detail.error?.code ?? 'unknown';
     } catch {}
     // CLI 二进制缺失是最常见的启动期错误，给出可执行的指引而不是裸 ENOENT。
-    if (error.code === 'ENOENT') {
+    if (error.code === 'ENOENT' || !existsSync(binary)) {
       const hint =
         process.platform === 'win32'
-          ? '未找到 zhihu-cli，请在服务端设置 ZHIHU_CLI_PATH 指向 zhihu-cli.exe。'
-          : '未找到 zhihu-cli，请在服务端设置 ZHIHU_CLI_PATH 指向可执行文件。';
+          ? `未找到 zhihu-cli，期望路径：${binary}\n请设置环境变量 ZHIHU_CLI_PATH 指向 zhihu-cli.exe，例如：
+  $env:ZHIHU_CLI_PATH = 'C:\\Users\\你的用户名\\AppData\\Local\\ZhihuCLI\\current\\zhihu-cli.exe'`
+          : `未找到 zhihu-cli，期望路径：${binary}\n请设置环境变量 ZHIHU_CLI_PATH 指向 zhihu-cli 二进制。`;
       throw new Error(hint);
     }
     console.error('Zhihu request failed', {
@@ -120,7 +165,12 @@ export function parseModel(text) {
 }
 
 async function ask(prompt) {
-  if (analysisProvider() === 'deepseek') return deepseekJSON(prompt);
+  if (analysisProvider() === 'deepseek') {
+    return deepseekJSON(prompt, {
+      // 开发态若临时替换过 AI key，则优先使用它；否则回退到 env 中的 DEEPSEEK_API_KEY。
+      key: tempOverrides.aiKey || undefined,
+    });
+  }
   const result = await cli([
     'answer',
     '--query',

@@ -40,6 +40,8 @@ const emptyProfile: Profile = {
   answers: {},
   skipped: [],
 };
+// “自由补充”在 profile.answers 中的内部固定键，不会当作补问展示。
+const FREE_NOTE_KEY = '__自由补充__';
 const exampleChoices = [
   '非科班，在职，想转行做开发',
   '工作三年后，想考全日制研究生',
@@ -231,10 +233,12 @@ function ProfileDialog({
   profile,
   onClose,
   onSave,
+  showFreeNote = false,
 }: {
   profile: Profile;
   onClose: () => void;
   onSave: (profile: Profile) => void;
+  showFreeNote?: boolean;
 }) {
   const [draft, setDraft] = useState(profile);
   const ref = useRef<HTMLDialogElement>(null);
@@ -246,7 +250,14 @@ function ProfileDialog({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          onSave(draft);
+          // 丢弃空答案（含被清空的自由补充），避免把空文本交给分析与补问。
+          const cleaned = {
+            ...draft,
+            answers: Object.fromEntries(
+              Object.entries(draft.answers).filter(([, v]) => v.trim() !== ''),
+            ),
+          };
+          onSave(cleaned);
         }}
       >
         <div className="dialog-heading">
@@ -263,7 +274,29 @@ function ProfileDialog({
         </div>
         <p className="muted">{profile.question}</p>
         <ProfileFields profile={draft} onChange={setDraft} />
-        {Object.entries(draft.answers).map(([q, a]) => (
+        {showFreeNote && (
+          <label className="field-label">
+            自由补充（可选）
+            <textarea
+              rows={3}
+              maxLength={400}
+              placeholder="没有待确认的问题时，也可以在这里补充任何想说明的情况…"
+              value={draft.answers[FREE_NOTE_KEY] ?? ''}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  answers: {
+                    ...draft.answers,
+                    [FREE_NOTE_KEY]: e.target.value,
+                  },
+                })
+              }
+            />
+          </label>
+        )}
+        {Object.entries(draft.answers)
+          .filter(([q]) => q !== FREE_NOTE_KEY)
+          .map(([q, a]) => (
           <label className="field-label" key={q}>
             {q}
             <input
@@ -334,6 +367,19 @@ function ProfileFields({
 export default function Workspace() {
   const [profile, setProfile] = useState<Profile>(emptyProfile);
   const [step, setStep] = useState<'start' | 'conditions' | 'explore'>('start');
+  // 首屏六字段（仿 demo）：年龄 / 学历 / 城市 / 当前 / 材料 / 想走方向
+  const [firstForm, setFirstFormState] = useState({
+    age: '',
+    edu: '', // 空则给下拉默认
+    city: '',
+    current: '',
+    materials: '',
+    target: '',
+  });
+  const setFirstForm = (patch: Partial<typeof firstForm>) =>
+    setFirstFormState((s) => ({ ...s, ...patch }));
+  const firstFormValid = () =>
+    firstForm.target.trim().length >= 2; // 最低：有一个想走的方向
   const [job, setJob] = useState<Job | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -345,6 +391,14 @@ export default function Workspace() {
     quota: { APIID: string; RemainingQuota: number }[] | null;
     archive: boolean;
   } | null>(null);
+  const [showKeys, setShowKeys] = useState(false);
+  const [zhihuKeyDraft, setZhihuKeyDraft] = useState('');
+  const [aiKeyDraft, setAiKeyDraft] = useState('');
+  const [overrideStatus, setOverrideStatus] = useState<{
+    zhihu: string | null;
+    ai: string | null;
+  } | null>(null);
+  const [keysSaving, setKeysSaving] = useState(false);
   const controller = useRef<AbortController | null>(null);
   const activeRequest = useRef(false);
   const snapshot = useRef({ profile, job });
@@ -383,6 +437,40 @@ export default function Workspace() {
       setError(e instanceof Error ? e.message : '历史样本暂不可用。');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function refreshOverrides() {
+    try {
+      const s = await request<{
+        provider: string;
+        devOverride: { zhihu: string | null; ai: string | null };
+      }>('/api/branches/settings');
+      setOverrideStatus(s.devOverride);
+    } catch {
+      setOverrideStatus(null);
+    }
+  }
+
+  async function saveTempKey(kind: 'zhihu' | 'ai', value: string) {
+    setKeysSaving(true);
+    setError('');
+    try {
+      const s = await request<{
+        ok: boolean;
+        devOverride: { zhihu: string | null; ai: string | null };
+      }>('/api/branches/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: kind, value }),
+      });
+      if (kind === 'zhihu') setZhihuKeyDraft('');
+      else setAiKeyDraft('');
+      setOverrideStatus(s.devOverride);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '保存密钥失败。');
+    } finally {
+      setKeysSaving(false);
     }
   }
 
@@ -559,6 +647,19 @@ export default function Workspace() {
             <span className="live-dot" />
             知乎公开内容
           </span>
+          <button
+            aria-haspopup="dialog"
+            aria-expanded={showKeys}
+            onClick={() => {
+              setShowKeys((v) => !v);
+              if (!showKeys) void refreshOverrides();
+            }}
+            title="开发期临时切换密钥"
+            className="key-toggle"
+          >
+            <SlidersHorizontal size={15} />
+            开发者密钥
+          </button>
           {step === 'explore' && (
             <button
               disabled={busy}
@@ -574,6 +675,59 @@ export default function Workspace() {
             </button>
           )}
         </div>
+        {showKeys && (
+          <section
+            className="key-panel"
+            aria-label="开发期临时密钥"
+          >
+            <div className="key-panel-title">
+              <strong>开发期临时密钥</strong>
+              <span>仅保存在本服务进程内存，刷新 / 重启即清除</span>
+            </div>
+            <label className="key-field">
+              <span>知乎 Access Secret {overrideStatus?.zhihu ? <em>（已注入 {overrideStatus.zhihu}）</em> : <em>（未注入 → 用本机默认）</em>}</span>
+              <input
+                type="password"
+                autoComplete="off"
+                value={zhihuKeyDraft}
+                placeholder="留空并点清除则恢复本机 keychain"
+                onChange={(e) => setZhihuKeyDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void saveTempKey('zhihu', zhihuKeyDraft);
+                  }
+                }}
+              />
+              <div className="key-actions">
+                <button disabled={keysSaving} onClick={() => void saveTempKey('zhihu', zhihuKeyDraft)}>
+                  {zhihuKeyDraft ? '注入该密钥' : '清除（用本机默认）'}
+                </button>
+              </div>
+            </label>
+            <label className="key-field">
+              <span>搜索 / 分析 AI Key（DeepSeek 等）{overrideStatus?.ai ? <em>（已注入 {overrideStatus.ai}）</em> : <em>（未注入 → 用 .env.local / 环境变量）</em>}</span>
+              <input
+                type="password"
+                autoComplete="off"
+                value={aiKeyDraft}
+                placeholder="留空并点清除则回退服务端配置"
+                onChange={(e) => setAiKeyDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void saveTempKey('ai', aiKeyDraft);
+                  }
+                }}
+              />
+              <div className="key-actions">
+                <button disabled={keysSaving} onClick={() => void saveTempKey('ai', aiKeyDraft)}>
+                  {aiKeyDraft ? '注入该密钥' : '清除（用服务端配置）'}
+                </button>
+              </div>
+            </label>
+          </section>
+        )}
       </header>
       {step !== 'explore' ? (
         <main className="start-page">
@@ -604,32 +758,98 @@ export default function Workspace() {
           {step === 'start' ? (
             <>
               <form
-                className="question-form"
+                className="question-form start-form"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (profile.question.trim().length >= 2)
-                    setStep('conditions');
+                  if (!firstFormValid()) return;
+                  const bg = [
+                    firstForm.age.trim() ? `${firstForm.age.trim()} 岁` : '',
+                    firstForm.edu || '',
+                    firstForm.city.trim() ? `在${firstForm.city.trim()}` : '',
+                    firstForm.current.trim() ? `目前是${firstForm.current.trim()}` : '',
+                    firstForm.materials.trim() ? `已有：${firstForm.materials.trim()}` : '',
+                  ]
+                    .filter(Boolean)
+                    .join('，');
+                  // 用目标方向作为主句驱动检索，背景拼接存 background 供第二页查看与动态补问
+                  const next = {
+                    ...profile,
+                    question: firstForm.target.trim(),
+                    background: bg || profile.background,
+                  };
+                  setProfile(next);
+                  setStep('conditions');
                 }}
               >
-                <label htmlFor="choice">当前选择</label>
-                <textarea
-                  id="choice"
-                  required
-                  minLength={2}
-                  maxLength={240}
-                  value={profile.question}
-                  onChange={(e) =>
-                    setProfile({ ...profile, question: e.target.value })
-                  }
-                  placeholder="例如：非科班，在职，想转行做开发"
-                />
+                <div className="field-grid">
+                  <label className="field-label">
+                    年龄
+                    <input
+                      type="number"
+                      min={10}
+                      max={80}
+                      value={firstForm.age}
+                      placeholder="例如 19"
+                      onChange={(e) => setFirstForm({ age: e.target.value })}
+                    />
+                  </label>
+                  <label className="field-label">
+                    学历
+                    <select
+                      value={firstForm.edu}
+                      onChange={(e) => setFirstForm({ edu: e.target.value })}
+                    >
+                      <option value="">请选择</option>
+                      <option>本科在读</option>
+                      <option>硕士研究生</option>
+                      <option>博士研究生</option>
+                      <option>大专 / 专科</option>
+                      <option>其他</option>
+                    </select>
+                  </label>
+                  <label className="field-label">
+                    所在城市
+                    <input
+                      value={firstForm.city}
+                      placeholder="例如 太原"
+                      onChange={(e) => setFirstForm({ city: e.target.value })}
+                    />
+                  </label>
+                  <label className="field-label">
+                    当前专业 / 行业
+                    <input
+                      value={firstForm.current}
+                      placeholder="例如：软件学院 / 电商运营"
+                      onChange={(e) => setFirstForm({ current: e.target.value })}
+                    />
+                  </label>
+                  <label className="field-label span2">
+                    已掌握的资料 / 背景（可选）
+                    <input
+                      value={firstForm.materials}
+                      placeholder="例如：无 / 会 C 语言 / 有竞赛经历…"
+                      onChange={(e) =>
+                        setFirstForm({ materials: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label className="field-label span2">
+                    想走的方向
+                    <input
+                      required
+                      value={firstForm.target}
+                      placeholder="例如：转专业到机器人学院 / 转行做数据分析"
+                      onChange={(e) => setFirstForm({ target: e.target.value })}
+                    />
+                  </label>
+                </div>
                 <div className="form-footer">
-                  <span className="muted">一次探索一个选择</span>
+                  <span className="muted">第二步会让你补充投入时间与限制</span>
                   <button
                     className="primary"
-                    disabled={profile.question.trim().length < 2}
+                    disabled={!firstFormValid()}
                   >
-                    继续 <ArrowRight size={18} />
+                    继续补充条件 <ArrowRight size={18} />
                   </button>
                 </div>
               </form>
@@ -657,8 +877,9 @@ export default function Workspace() {
                     <button
                       key={choice}
                       onClick={() => {
-                        setProfile({ ...emptyProfile, question: choice });
-                        setStep('conditions');
+                        // 示例作为可编辑起点：直接回填到首屏的目标/当前，不绕开表单。
+                        setFirstForm({ target: choice });
+                        setProfile({ ...profile, question: choice });
                       }}
                     >
                       <span className="example-index">0{i + 1}</span>
@@ -692,7 +913,12 @@ export default function Workspace() {
                   <button
                     type="button"
                     className="text-button"
-                    onClick={() => setStep('start')}
+                    onClick={() => {
+                      // 返回首屏时保留目标，避免表单被清空
+                      if (profile.question.trim() && !firstForm.target.trim())
+                        setFirstForm({ target: profile.question });
+                      setStep('start');
+                    }}
                   >
                     <ArrowLeft size={16} />
                     修改选择
@@ -990,7 +1216,7 @@ export default function Workspace() {
                         <CheckCircle2 size={22} />
                         <p>目前没有新的关键补问。</p>
                         <span className="meta">
-                          这不代表信息已完整。每段经历中仍可能有来源未说明的条件。
+                          这不代表信息已完整。想补充任何情况，可点下方「修改已填写条件」自由填写。
                         </span>
                       </div>
                     )}
@@ -1079,6 +1305,7 @@ export default function Workspace() {
           onSave={(p) =>
             void explore(p, job?.sources.length ? job.id : undefined)
           }
+          showFreeNote={questions.length === 0}
         />
       )}
     </div>
