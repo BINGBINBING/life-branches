@@ -40,6 +40,8 @@ const emptyProfile: Profile = {
   answers: {},
   skipped: [],
 };
+// “自由补充”在 profile.answers 中的内部固定键，不会当作补问展示。
+const FREE_NOTE_KEY = '__自由补充__';
 const exampleChoices = [
   '非科班，在职，想转行做开发',
   '工作三年后，想考全日制研究生',
@@ -231,10 +233,12 @@ function ProfileDialog({
   profile,
   onClose,
   onSave,
+  showFreeNote = false,
 }: {
   profile: Profile;
   onClose: () => void;
   onSave: (profile: Profile) => void;
+  showFreeNote?: boolean;
 }) {
   const [draft, setDraft] = useState(profile);
   const ref = useRef<HTMLDialogElement>(null);
@@ -246,7 +250,14 @@ function ProfileDialog({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          onSave(draft);
+          // 丢弃空答案（含被清空的自由补充），避免把空文本交给分析与补问。
+          const cleaned = {
+            ...draft,
+            answers: Object.fromEntries(
+              Object.entries(draft.answers).filter(([, v]) => v.trim() !== ''),
+            ),
+          };
+          onSave(cleaned);
         }}
       >
         <div className="dialog-heading">
@@ -263,7 +274,29 @@ function ProfileDialog({
         </div>
         <p className="muted">{profile.question}</p>
         <ProfileFields profile={draft} onChange={setDraft} />
-        {Object.entries(draft.answers).map(([q, a]) => (
+        {showFreeNote && (
+          <label className="field-label">
+            自由补充（可选）
+            <textarea
+              rows={3}
+              maxLength={400}
+              placeholder="没有待确认的问题时，也可以在这里补充任何想说明的情况…"
+              value={draft.answers[FREE_NOTE_KEY] ?? ''}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  answers: {
+                    ...draft.answers,
+                    [FREE_NOTE_KEY]: e.target.value,
+                  },
+                })
+              }
+            />
+          </label>
+        )}
+        {Object.entries(draft.answers)
+          .filter(([q]) => q !== FREE_NOTE_KEY)
+          .map(([q, a]) => (
           <label className="field-label" key={q}>
             {q}
             <input
@@ -1183,7 +1216,7 @@ export default function Workspace() {
                         <CheckCircle2 size={22} />
                         <p>目前没有新的关键补问。</p>
                         <span className="meta">
-                          这不代表信息已完整。每段经历中仍可能有来源未说明的条件。
+                          这不代表信息已完整。想补充任何情况，可点下方「修改已填写条件」自由填写。
                         </span>
                       </div>
                     )}
@@ -1272,6 +1305,7 @@ export default function Workspace() {
           onSave={(p) =>
             void explore(p, job?.sources.length ? job.id : undefined)
           }
+          showFreeNote={questions.length === 0}
         />
       )}
     </div>
