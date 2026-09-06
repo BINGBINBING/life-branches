@@ -1,32 +1,45 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { homedir, platform } from 'node:os';
-import { join } from 'node:path';
+import { win32, posix } from 'node:path';
 import { existsSync } from 'node:fs';
 import { analysisProvider, deepseekJSON } from './deepseek.mjs';
 
 const exec = promisify(execFile);
 
 // zhihu-cli 可执行文件路径：可被环境变量覆盖；否则按当前平台探测常见安装位置。
-function resolveCliBinary() {
-  const fromEnv = process.env.ZHIHU_CLI_PATH;
+// 支持 ZHIHU_CLI_HOME / ZHIHU_CLI_PATH，并通过参数注入便于隔离测试。
+export function resolveCliBinary({
+  env = process.env,
+  os = platform(),
+  home = homedir(),
+  exists = existsSync,
+} = {}) {
+  const join = (os === 'win32' ? win32 : posix).join;
+  const fromEnv = env.ZHIHU_CLI_PATH;
   if (fromEnv) return fromEnv;
+  if (env.ZHIHU_CLI_HOME)
+    return join(
+      env.ZHIHU_CLI_HOME,
+      'current',
+      os === 'win32' ? 'zhihu-cli.exe' : 'zhihu-cli',
+    );
 
   const candidates = [];
-  if (platform() === 'win32') {
-    const local = process.env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local');
+  if (os === 'win32') {
+    const local = env.LOCALAPPDATA || join(home, 'AppData', 'Local');
     candidates.push(
       join(local, 'ZhihuCLI', 'current', 'zhihu-cli.exe'),
       join(local, 'Programs', 'ZhihuCLI', 'zhihu-cli.exe'),
     );
   } else {
     candidates.push(
-      join(homedir(), 'Library/Application Support/zhihu-cli/current/zhihu-cli'),
-      join(homedir(), '.local', 'share', 'zhihu-cli', 'zhihu-cli'),
-      join(homedir(), '.zhihu-cli', 'bin', 'zhihu-cli'),
+      join(home, 'Library/Application Support/zhihu-cli/current/zhihu-cli'),
+      join(home, '.local', 'share', 'zhihu-cli', 'zhihu-cli'),
+      join(home, '.zhihu-cli', 'bin', 'zhihu-cli'),
     );
   }
-  for (const path of candidates) if (existsSync(path)) return path;
+  for (const path of candidates) if (exists(path)) return path;
   return candidates[0];
 }
 
