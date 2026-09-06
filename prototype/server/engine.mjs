@@ -5,6 +5,11 @@ import { win32, posix } from 'node:path';
 import { existsSync } from 'node:fs';
 import { analysisProvider, deepseekJSON } from './deepseek.mjs';
 import { getCachedSearch, putCachedSearch } from './storage.mjs';
+import {
+  searchZhihu as httpSearchZhihu,
+  queryQuota as httpQueryQuota,
+  chatCompletions as httpChatCompletions,
+} from './zhihu-http.mjs';
 
 const exec = promisify(execFile);
 
@@ -80,6 +85,54 @@ function summarizeTempCredentials() {
 function setActiveLabel(value) {
   const s = String(value || '');
   return s.length > 6 ? `${s.slice(0, 3)}…${s.slice(-3)}` : '•••';
+}
+
+// ---- 知乎后端选择：HTTP 直连优先，未配置 Secret 时回退本地 CLI ----
+// 便于云端（无 zhihu-cli）与本地开发共用同一套 engine。
+function httpSecret() {
+  return tempOverrides.zhihuSecret ?? process.env.ZHIHU_ACCESS_SECRET ?? '';
+}
+function zhihuHttpAvailable() {
+  return Boolean(httpSecret());
+}
+
+// 把 HTTP provider 的错误翻译成与本地 CLI 一致的可见文案。
+function zhihuErrorToMessage(e) {
+  const m = String(e?.message ?? '');
+  if (m.includes('RATE') || m === 'QUOTA')
+    return '知乎额度不足或请求受限，已停止调用。请查看开放平台用量，额度恢复后再试。';
+  if (m.includes('AUTH'))
+    return '知乎凭证无效，请检查 ZHIHU_ACCESS_SECRET 配置。';
+  return '知乎服务暂时无法完成请求，请检查连接或稍后重试。';
+}
+
+async function zhihuBackendSearch(query, count = 5) {
+  if (zhihuHttpAvailable()) {
+    try {
+      return await httpSearchZhihu(query, count, { secret: httpSecret() });
+    } catch (e) {
+      throw new Error(zhihuErrorToMessage(e));
+    }
+  }
+  return cli(['search', 'zhihu', '--query', query, '--count', String(count)]);
+}
+
+/** 知乎额度查询（HTTP 优先，CLI 回退）。返回 { Code, Data:[...] } */
+export async function zhihuBackendQuota() {
+  if (zhihuHttpAvailable()) {
+    try {
+      return await httpQueryQuota({ secret: httpSecret() });
+    } catch (e) {
+      throw new Error(zhihuErrorToMessage(e));
+    }
+  }
+  return cli([
+    'quota',
+    '--api-id',
+    'zhihu_search',
+    '--api-id',
+    'zhida_openai',
+  ]);
 }
 
 let nextRequestAt = 0;
@@ -171,6 +224,23 @@ async function ask(prompt) {
       // 开发态若临时替换过 AI key，则优先使用它；否则回退到 env 中的 DEEPSEEK_API_KEY。
       key: tempOverrides.aiKey || undefined,
     });
+  }
+  if (zhihuHttpAvailable()) {
+    // 知乎直答走 HTTP（云端没有本地 CLI）。
+    let result;
+    try {
+      result = await httpChatCompletions({
+        model: 'zhida-fast-1p5',
+        messages: [{ role: 'user', content: prompt }],
+        secret: httpSecret(),
+      });
+    } catch (e) {
+      throw new Error(zhihuErrorToMessage(e));
+    }
+    return {
+      value: parseModel(result.choices?.[0]?.message?.content),
+      metadata: { provider: 'zhihu', model: 'zhida-fast-1p5' },
+    };
   }
   const result = await cli([
     'answer',
@@ -285,10 +355,10 @@ export async function search(profile, progress, onSources = () => {}) {
       data = await getCachedSearch(query);
       if (data) data = { at: Date.now(), data: data.data }; // 刷新热缓存基准时间
       if (!data) {
-        // 三级：真实调用知乎，成功后写入内存与磁盘
+        // 三级：真实调用知乎（HTTP 优先 / CLI 回退），成功后写入内存与磁盘
         data = {
           at: Date.now(),
-          data: await cli(['search', 'zhihu', '--query', query, '--count', '5']),
+          data: await zhihuBackendSearch(query, 5),
         };
         try {
           await putCachedSearch(query, data);

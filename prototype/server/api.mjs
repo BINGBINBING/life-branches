@@ -5,9 +5,9 @@ import {
   analyze,
   search,
   validProfile,
-  cli,
   setTempCredential,
   summaryCredentialStatus,
+  zhihuBackendQuota,
 } from './engine.mjs';
 import { curatedArchive } from './archive-annotations.mjs';
 import { analysisProvider, requiredQuotaIds } from './deepseek.mjs';
@@ -39,15 +39,7 @@ function localDay(ts) {
 async function ensureQuota() {
   if (Date.now() - quotaAt <= 60000) return;
   try {
-    quota = (
-      await cli([
-        'quota',
-        '--api-id',
-        'zhihu_search',
-        '--api-id',
-        'zhida_openai',
-      ])
-    ).Data;
+    quota = (await zhihuBackendQuota()).Data;
     quotaAt = Date.now();
   } catch {
     quota = null;
