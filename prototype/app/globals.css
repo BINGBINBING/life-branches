@@ -1261,3 +1261,104 @@ label {
   color: var(--green);
 }
 
+/* ---- 首页多字段表单（仿 demo 清新绿白卡片） ---- */
+.start-page {
+  background: linear-gradient(140deg, #f3f7f1 0%, #ffffff 55%, #eef4f0 100%);
+}
+.start-form {
+  margin-top: 28px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 14px 40px rgba(33, 102, 78, 0.08);
+  padding: 26px 26px 20px;
+  max-width: 760px;
+}
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+}
+.field-grid .span2 {
+  grid-column: span 2;
+}
+.field-grid .field-label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.field-grid input,
+.field-grid select {
+  width: 100%;
+  border: 1px solid #d6dfd8;
+  border-radius: 10px;
+  background: #fff;
+  padding: 11px 13px;
+  font-size: 15px;
+  font: inherit;
+  color: var(--ink);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.field-grid input:focus,
+.field-grid select:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(33, 102, 78, 0.12);
+}
+.field-grid .span2 input,
+.field-grid .span2 select {
+  padding: 13px;
+}
+.start-form .form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--line);
+}
+.start-form .form-footer .primary {
+  background: var(--green);
+  border-color: var(--green);
+  border-radius: 999px;
+  padding: 11px 22px;
+  font-size: 15px;
+  gap: 8px;
+}
+.start-form .form-footer .primary:hover:not(:disabled) {
+  background: #154e3b;
+}
+.start-page h1 {
+  font-size: 30px;
+}
+.start-page .archive-entry {
+  border-radius: 12px;
+  overflow: hidden;
+}
+.example-choices button {
+  border-radius: 12px;
+  padding: 13px 15px;
+  background: #fff;
+  transition: transform 0.1s, border-color 0.15s, box-shadow 0.15s;
+}
+.example-choices button:hover:not(:disabled) {
+  border-color: var(--green);
+  box-shadow: 0 6px 18px rgba(33, 102, 78, 0.1);
+  transform: translateY(-1px);
+  background: #fff;
+}
+@media (max-width: 720px) {
+  .field-grid {
+    grid-template-columns: 1fr;
+  }
+  .field-grid .span2 {
+    grid-column: span 1;
+  }
+}
+
+
