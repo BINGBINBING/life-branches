@@ -42,6 +42,36 @@ const emptyProfile: Profile = {
 };
 // “自由补充”在 profile.answers 中的内部固定键，不会当作补问展示。
 const FREE_NOTE_KEY = '__自由补充__';
+// 浏览器本地历史探索（结果快照）存储键与上限。
+const HISTORY_KEY = 'lb-browser-history-v1';
+const HISTORY_MAX = 20;
+
+function readHistoryLocal(): Job[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Job[];
+    return Array.isArray(parsed)
+      ? parsed.filter((j) => j && j.profile)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeHistoryLocal(list: Job[]) {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+  } catch {
+    // 容量超限：去掉最旧一条再试一次，仍失败则放弃。
+    try {
+      localStorage.setItem(
+        HISTORY_KEY,
+        JSON.stringify(list.slice(0, HISTORY_MAX - 1)),
+      );
+    } catch {}
+  }
+}
 const exampleChoices = [
   '非科班，在职，想转行做开发',
   '工作三年后，想考全日制研究生',
@@ -327,6 +357,87 @@ function FeedbackCard({
   );
 }
 
+function HistoryDialog({
+  history,
+  onOpen,
+  onDelete,
+  onClose,
+}: {
+  history: Job[];
+  onOpen: (entry: Job) => void;
+  onDelete: (id: string) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    ref.current?.showModal();
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      className="history-dialog"
+      onCancel={onClose}
+      onClose={onClose}
+    >
+      <div className="history-head">
+        <strong>我的历史探索</strong>
+        <span className="meta">保存在此浏览器中</span>
+        <button
+          type="button"
+          className="icon-button"
+          title="关闭"
+          aria-label="关闭"
+          onClick={() => ref.current?.close()}
+        >
+          <X size={18} />
+        </button>
+      </div>
+      {history.length ? (
+        <ul className="history-list">
+          {history.map((h) => (
+            <li key={h.id}>
+              <button
+                type="button"
+                className="history-entry"
+                onClick={() => onOpen(h)}
+              >
+                <span className="history-question">{h.profile.question}</span>
+                <span className="history-meta">
+                  {new Date(h.createdAt).toLocaleString('zh-CN', {
+                    month: 'numeric',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false,
+                  })}
+                  {' · '}
+                  {h.result?.paths?.length || 0} 条路径
+                  {' · '}
+                  {h.sources?.length || 0} 篇来源
+                  {h.reused ? ' · 复用来源' : ''}
+                </span>
+              </button>
+              <button
+                type="button"
+                className="history-delete"
+                title="删除"
+                aria-label="删除该条历史"
+                onClick={() => onDelete(h.id)}
+              >
+                <X size={14} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted" style={{ padding: '18px 4px' }}>
+          还没有保存的探索。完成一次实时搜索后会自动出现在这里。
+        </p>
+      )}
+    </dialog>
+  );
+}
+
 function ProfileDialog({
   profile,
   onClose,
@@ -538,6 +649,50 @@ export default function Workspace() {
     }
   }
 
+  const [history, setHistory] = useState<Job[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+
+  // 浏览器本地读取最近探索快照（SSR 安全：仅在挂载后读取）。
+  useEffect(() => {
+    let ignore = false;
+    void Promise.resolve().then(() => {
+      if (ignore) return;
+      setHistory(readHistoryLocal());
+    });
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  const rememberJob = useCallback((job: Job) => {
+    setHistory((prev) => {
+      const rest = prev.filter((h) => h.id !== job.id);
+      const next = [{ ...job }, ...rest].slice(0, HISTORY_MAX);
+      writeHistoryLocal(next);
+      return next;
+    });
+  }, []);
+
+  const removeHistory = useCallback((id: string) => {
+    setHistory((prev) => {
+      const next = prev.filter((h) => h.id !== id);
+      writeHistoryLocal(next);
+      return next;
+    });
+  }, []);
+
+  function openHistoryEntry(entry: Job) {
+    setError('');
+    setJob(entry);
+    setProfile(entry.profile);
+    setPathId(entry.result?.paths[0]?.id || '');
+    setFilter('all');
+    setFocus('');
+    setEditing(false);
+    setShowHistory(false);
+    setStep('explore');
+  }
+
   async function refreshOverrides() {
     try {
       const s = await request<{
@@ -609,6 +764,9 @@ export default function Workspace() {
           if (current.status !== 'running') {
             if (current.error) setError(current.error);
             setPathId(current.result?.paths[0]?.id || '');
+            // 探索成功即保存快照到浏览器本地，便于之后回看。
+            if (current.status === 'done' && current.result)
+              rememberJob(current);
             return current;
           }
           if (Date.now() > deadline)
@@ -628,7 +786,7 @@ export default function Workspace() {
         activeRequest.current = false;
       }
     },
-    [],
+    [rememberJob],
   );
 
   const path =
@@ -758,6 +916,18 @@ export default function Workspace() {
             <SlidersHorizontal size={15} />
             开发者密钥
           </button>
+          {history.length > 0 && (
+            <button
+              aria-haspopup="dialog"
+              aria-expanded={showHistory}
+              onClick={() => setShowHistory(true)}
+              title="查看浏览器中保存的探索结果"
+              className="key-toggle"
+            >
+              <Clock3 size={15} />
+              我的结果（{history.length}）
+            </button>
+          )}
           {step === 'explore' && (
             <button
               disabled={busy}
@@ -1417,6 +1587,14 @@ export default function Workspace() {
             void explore(p, job?.sources.length ? job.id : undefined)
           }
           showFreeNote={questions.length === 0}
+        />
+      )}
+      {showHistory && (
+        <HistoryDialog
+          history={history}
+          onOpen={openHistoryEntry}
+          onDelete={removeHistory}
+          onClose={() => setShowHistory(false)}
         />
       )}
     </div>
