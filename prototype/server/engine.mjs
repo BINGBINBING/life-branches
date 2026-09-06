@@ -1,13 +1,48 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { homedir, platform } from 'node:os';
+import { win32, posix } from 'node:path';
+import { existsSync } from 'node:fs';
 import { analysisProvider, deepseekJSON } from './deepseek.mjs';
 
 const exec = promisify(execFile);
-const binary =
-  process.env.ZHIHU_CLI_PATH ||
-  join(homedir(), 'Library/Application Support/zhihu-cli/current/zhihu-cli');
+
+// zhihu-cli 可执行文件路径：可被环境变量覆盖；否则按当前平台探测常见安装位置。
+export function resolveCliBinary({
+  env = process.env,
+  os = platform(),
+  home = homedir(),
+  exists = existsSync,
+} = {}) {
+  const join = (os === 'win32' ? win32 : posix).join;
+  const fromEnv = env.ZHIHU_CLI_PATH;
+  if (fromEnv) return fromEnv;
+  if (env.ZHIHU_CLI_HOME)
+    return join(
+      env.ZHIHU_CLI_HOME,
+      'current',
+      os === 'win32' ? 'zhihu-cli.exe' : 'zhihu-cli',
+    );
+
+  const candidates = [];
+  if (os === 'win32') {
+    const local = env.LOCALAPPDATA || join(home, 'AppData', 'Local');
+    candidates.push(
+      join(local, 'ZhihuCLI', 'current', 'zhihu-cli.exe'),
+      join(local, 'Programs', 'ZhihuCLI', 'zhihu-cli.exe'),
+    );
+  } else {
+    candidates.push(
+      join(home, 'Library/Application Support/zhihu-cli/current/zhihu-cli'),
+      join(home, '.local', 'share', 'zhihu-cli', 'zhihu-cli'),
+      join(home, '.zhihu-cli', 'bin', 'zhihu-cli'),
+    );
+  }
+  for (const path of candidates) if (exists(path)) return path;
+  return candidates[0];
+}
+
+const binary = resolveCliBinary();
 const cache = new Map();
 let nextRequestAt = 0;
 let queue = Promise.resolve();
@@ -47,6 +82,14 @@ export async function cli(args) {
       const detail = JSON.parse(error.stdout || '{}');
       reason = detail.Code ?? detail.error?.code ?? 'unknown';
     } catch {}
+    // CLI 二进制缺失是最常见的启动期错误，给出可执行的指引而不是裸 ENOENT。
+    if (error.code === 'ENOENT') {
+      const hint =
+        process.platform === 'win32'
+          ? '未找到 zhihu-cli，请在服务端设置 ZHIHU_CLI_PATH 指向 zhihu-cli.exe。'
+          : '未找到 zhihu-cli，请在服务端设置 ZHIHU_CLI_PATH 指向可执行文件。';
+      throw new Error(hint);
+    }
     console.error('Zhihu request failed', {
       code: error.code || 'unknown',
       signal: error.signal || null,
