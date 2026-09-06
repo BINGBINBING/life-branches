@@ -1,13 +1,36 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { homedir } from 'node:os';
+import { homedir, platform } from 'node:os';
 import { join } from 'node:path';
+import { existsSync } from 'node:fs';
 import { analysisProvider, deepseekJSON } from './deepseek.mjs';
 
 const exec = promisify(execFile);
-const binary =
-  process.env.ZHIHU_CLI_PATH ||
-  join(homedir(), 'Library/Application Support/zhihu-cli/current/zhihu-cli');
+
+// zhihu-cli 可执行文件路径：可被环境变量覆盖；否则按当前平台探测常见安装位置。
+function resolveCliBinary() {
+  const fromEnv = process.env.ZHIHU_CLI_PATH;
+  if (fromEnv) return fromEnv;
+
+  const candidates = [];
+  if (platform() === 'win32') {
+    const local = process.env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local');
+    candidates.push(
+      join(local, 'ZhihuCLI', 'current', 'zhihu-cli.exe'),
+      join(local, 'Programs', 'ZhihuCLI', 'zhihu-cli.exe'),
+    );
+  } else {
+    candidates.push(
+      join(homedir(), 'Library/Application Support/zhihu-cli/current/zhihu-cli'),
+      join(homedir(), '.local', 'share', 'zhihu-cli', 'zhihu-cli'),
+      join(homedir(), '.zhihu-cli', 'bin', 'zhihu-cli'),
+    );
+  }
+  for (const path of candidates) if (existsSync(path)) return path;
+  return candidates[0];
+}
+
+const binary = resolveCliBinary();
 const cache = new Map();
 let nextRequestAt = 0;
 let queue = Promise.resolve();
@@ -47,6 +70,15 @@ export async function cli(args) {
       const detail = JSON.parse(error.stdout || '{}');
       reason = detail.Code ?? detail.error?.code ?? 'unknown';
     } catch {}
+    // CLI 二进制缺失是最常见的启动期错误，给出可执行的指引而不是裸 ENOENT。
+    if (error.code === 'ENOENT' || !existsSync(binary)) {
+      const hint =
+        process.platform === 'win32'
+          ? `未找到 zhihu-cli，期望路径：${binary}\n请设置环境变量 ZHIHU_CLI_PATH 指向 zhihu-cli.exe，例如：
+  $env:ZHIHU_CLI_PATH = 'C:\\Users\\你的用户名\\AppData\\Local\\ZhihuCLI\\current\\zhihu-cli.exe'`
+          : `未找到 zhihu-cli，期望路径：${binary}\n请设置环境变量 ZHIHU_CLI_PATH 指向 zhihu-cli 二进制。`;
+      throw new Error(hint);
+    }
     console.error('Zhihu request failed', {
       code: error.code || 'unknown',
       signal: error.signal || null,
