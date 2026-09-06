@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
@@ -11,11 +11,48 @@ import {
 } from './engine.mjs';
 import { curatedArchive } from './archive-annotations.mjs';
 import { analysisProvider, requiredQuotaIds } from './deepseek.mjs';
+import { addFeedback, listFeedback, addUsage, listUsage } from './storage.mjs';
 
 const jobs = new Map();
 let active = 0;
 let quota = null;
 let quotaAt = 0;
+
+// 管理后台密码：优先取环境变量；未配置时使用仅供本地开发的默认值（上云前必须设置 ADMIN_PASSWORD）。
+function adminPassword() {
+  return process.env.ADMIN_PASSWORD || 'life-branches-dev';
+}
+
+function authAdmin(req) {
+  const got = req.headers['x-admin-password'];
+  if (typeof got !== 'string' || !got) return false;
+  const want = adminPassword();
+  if (got.length !== want.length) return false;
+  return timingSafeEqual(Buffer.from(got), Buffer.from(want));
+}
+
+function localDay(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+async function ensureQuota() {
+  if (Date.now() - quotaAt <= 60000) return;
+  try {
+    quota = (
+      await cli([
+        'quota',
+        '--api-id',
+        'zhihu_search',
+        '--api-id',
+        'zhida_openai',
+      ])
+    ).Data;
+    quotaAt = Date.now();
+  } catch {
+    quota = null;
+  }
+}
 const send = (res, status, data) => {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -49,22 +86,7 @@ export function localApi() {
           if (origin && new URL(origin).host !== req.headers.host)
             return send(res, 403, { error: '不支持跨站请求。' });
           if (req.method === 'GET' && url.pathname === '/api/branches/health') {
-            if (Date.now() - quotaAt > 60000) {
-              try {
-                quota = (
-                  await cli([
-                    'quota',
-                    '--api-id',
-                    'zhihu_search',
-                    '--api-id',
-                    'zhida_openai',
-                  ])
-                ).Data;
-                quotaAt = Date.now();
-              } catch {
-                quota = null;
-              }
-            }
+            await ensureQuota();
             let archive = true;
             try {
               await readFile(
@@ -155,6 +177,101 @@ export function localApi() {
               return send(res, 400, { error: e.message || '设置失败。' });
             }
           }
+          if (
+            req.method === 'POST' &&
+            url.pathname === '/api/branches/feedback'
+          ) {
+            try {
+              const input = await body(req);
+              const rating = Number(input?.rating);
+              const comment = String(input?.comment ?? '').trim();
+              if (!Number.isInteger(rating) || rating < 1 || rating > 5)
+                return send(res, 400, { error: '评分需为 1–5 的整数。' });
+              if (comment.length > 2000)
+                return send(res, 400, { error: '评论过长（限 2000 字）。' });
+              const question = String(input?.question ?? '')
+                .trim()
+                .slice(0, 120);
+              const jobId =
+                typeof input?.jobId === 'string' && input.jobId
+                  ? input.jobId.slice(0, 64)
+                  : null;
+              await addFeedback({
+                id: randomUUID(),
+                rating,
+                comment,
+                question,
+                jobId,
+              });
+              return send(res, 200, { ok: true });
+            } catch (e) {
+              return send(res, 400, { error: e.message || '反馈提交失败。' });
+            }
+          }
+          if (
+            req.method === 'GET' &&
+            url.pathname === '/api/branches/admin/summary'
+          ) {
+            if (!authAdmin(req))
+              return send(res, 401, { error: '管理密码错误或未登录。' });
+            await ensureQuota();
+            const feedback = await listFeedback();
+            const usage = await listUsage();
+            const today = localDay(Date.now());
+            const ok = usage.filter((u) => u.ok);
+            const failed = usage.filter((u) => !u.ok);
+            const okToday = ok.filter((u) => localDay(u.at) === today);
+            const tokens = ok.reduce(
+              (acc, u) => {
+                const g = u.usage || {};
+                acc.prompt += Number(g.prompt_tokens) || 0;
+                acc.completion += Number(g.completion_tokens) || 0;
+                acc.total += Number(g.total_tokens) || 0;
+                return acc;
+              },
+              { prompt: 0, completion: 0, total: 0 },
+            );
+            const byModel = {};
+            for (const u of ok)
+              if (u.model) byModel[u.model] = (byModel[u.model] || 0) + 1;
+            const avgSources = ok.length
+              ? ok.reduce((s, u) => s + (u.sources || 0), 0) / ok.length
+              : 0;
+            const ratingSum = feedback.reduce(
+              (s, f) => s + (Number(f.rating) || 0),
+              0,
+            );
+            return send(res, 200, {
+              admin: true,
+              serverTime: new Date().toISOString(),
+              today,
+              adminPasswordRequired:
+                !process.env.ADMIN_PASSWORD &&
+                adminPassword() === 'life-branches-dev',
+              zhihuQuota: quota ?? null,
+              usage: {
+                total: usage.length,
+                ok: ok.length,
+                failed: failed.length,
+                okToday: okToday.length,
+                avgSources: Number(avgSources.toFixed(1)),
+                tokens,
+                byModel,
+                lastRecords: [...usage].reverse().slice(0, 30),
+              },
+              feedback: {
+                total: feedback.length,
+                avgRating: feedback.length
+                  ? Number((ratingSum / feedback.length).toFixed(2))
+                  : null,
+                ratingCounts: [5, 4, 3, 2, 1].map((r) => ({
+                  rating: r,
+                  count: feedback.filter((f) => f.rating === r).length,
+                })),
+                recent: [...feedback].reverse().slice(0, 50),
+              },
+            });
+          }
           if (req.method !== 'POST' || url.pathname !== '/api/branches/explore')
             return send(res, 404, { error: '未找到请求。' });
           if (
@@ -227,6 +344,24 @@ export function localApi() {
             } finally {
               active--;
               quotaAt = 0;
+              const meta = job.result?.analysis || {};
+              try {
+                await addUsage({
+                  ok: job.status === 'done',
+                  reused: job.reused,
+                  sources: job.sources.length,
+                  provider: meta.provider || null,
+                  model: meta.model || null,
+                  usage: meta.usage || null,
+                  error:
+                    job.status === 'error'
+                      ? String(job.error || '').slice(0, 200)
+                      : null,
+                  question: String(job.profile?.question || '').slice(0, 120),
+                });
+              } catch {
+                // 用量记录失败不影响探索结果本身。
+              }
             }
           })();
         } catch (error) {

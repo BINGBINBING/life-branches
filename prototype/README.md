@@ -13,7 +13,9 @@ npm start
 
 默认访问 http://localhost:4317 。若该端口已占用，使用 `npm run dev -- --host 127.0.0.1 --port 4318`。
 
-应用使用当前机器的系统安全凭证库，不需要把密钥复制到代码或前端。CLI 不在默认 macOS 路径时，可通过 `ZHIHU_CLI_PATH` 指定二进制绝对路径。
+应用使用当前机器的系统安全凭证库，不需要把密钥复制到代码或前端。CLI 会按平台自动探测官方默认安装位置（Windows：`%LOCALAPPDATA%\ZhihuCLI\current\zhihu-cli.exe`；macOS：`~/Library/Application Support/zhihu-cli/current/zhihu-cli`）；非默认路径可通过 `ZHIHU_CLI_PATH` 指定二进制绝对路径，或设置 `ZHIHU_CLI_HOME` 指向安装根目录。
+
+**Windows 提示**：若 PowerShell 执行策略阻止 `npm`，请改用 `npm.cmd` 执行所有命令。
 
 ## 数据与分析
 
@@ -48,3 +50,11 @@ npm run build
 2026-09-06 已通过真实后端全链路验证：两组搜索取得 9 条去重来源，生成分析后修改虚构人物条件，复用全部来源完成重新分析。独立运行方式为 `node server/run-live-verification.mjs`，会消耗两次搜索、两次直答，不属于默认测试。
 
 内容质量验收未通过：仍存在引文不支持结论、行动路径错误归类、正反案例覆盖不足等问题。引用匹配校验并不验证语义，测试脚本的 PASS 仅表示流程成功。此次测试后搜索剩余 8 次、直答剩余 0 次，额度以后续实查为准。尚未做浏览器截图与移动端实机验收，也未验证 WebMCP 浏览器支持。
+
+## 管理后台与用户反馈
+
+- 结果页右栏提供 1–5 星评分与可选评论；数据写入 `.local/feedback.jsonl`。
+- 每次探索（含失败）记一条用量：次数、来源数、provider/模型、token 用量与问题概要，写入 `.local/usage.jsonl`。
+- 管理页面位于 `/admin`：概览指标、token 汇总、知乎实时额度、反馈列表与最近使用记录。管理密码读取 `ADMIN_PASSWORD`，未设置时回退默认值 `life-branches-dev`（仅限本地开发，正式使用必须显式设置）。
+- 顶栏「开发者密钥」面板可在开发期临时注入知乎 Access Secret 与分析 AI Key，仅存服务进程内存，刷新 / 重启即失效；未注入时行为与默认配置完全一致。
+- 存储实现见 `server/storage.mjs`；上云时替换为同接口的 KV/数据库实现，数据文件与密钥不进入仓库（`.local/`、`.env*` 均已忽略）。

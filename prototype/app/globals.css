@@ -1361,4 +1361,216 @@ label {
   }
 }
 
+/* ---- 反馈卡（结果页右栏） ---- */
+.feedback-card {
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.feedback-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.feedback-head strong {
+  font-size: 15px;
+  color: var(--ink);
+}
+.feedback-head span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.star-row {
+  display: flex;
+  gap: 2px;
+  margin-top: 8px;
+}
+.star-row button {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  font-size: 22px;
+  line-height: 1;
+  color: #cfd6d1;
+}
+.star-row button.on {
+  color: var(--amber);
+}
+.feedback-card textarea {
+  margin-top: 8px;
+  font-size: 13px;
+  min-height: 60px;
+}
+.feedback-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+.feedback-actions .primary {
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-size: 13px;
+}
+.feedback-thanks {
+  color: var(--green);
+  font-size: 14px;
+}
+.admin-entry {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+  background: none;
+  border: none;
+  padding: 2px 6px;
+  text-decoration: none;
+  border-bottom: 1px dashed var(--line);
+}
+.admin-entry:hover {
+  color: var(--green);
+}
+.star-row button:hover {
+  color: var(--amber);
+}
+
+/* ---- 管理后台 ---- */
+.admin-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 34px 24px 80px;
+}
+.admin-topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+.admin-topbar .brand {
+  flex: 1;
+}
+.admin-topbar .brand strong {
+  font-size: 20px;
+}
+.admin-topbar .meta {
+  margin-left: 12px;
+}
+.admin-page .ghost {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.admin-page .ghost:hover {
+  color: var(--green);
+  border-color: var(--green);
+}
+.admin-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-bottom: 18px;
+}
+.admin-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.admin-card-head h2 {
+  font-size: 17px;
+}
+.admin-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+@media (max-width: 860px) {
+  .admin-cols {
+    grid-template-columns: 1fr;
+  }
+}
+.admin-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 30px;
+}
+.admin-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.admin-metric b {
+  font-size: 22px;
+  color: var(--green);
+}
+.admin-metric span {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 8px;
+}
+.admin-table th,
+.admin-table td {
+  text-align: left;
+  padding: 7px 10px;
+  border-bottom: 1px solid #eef1ef;
+}
+.admin-table th {
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 12px;
+}
+.admin-cell-ellipsis {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-feedback-list {
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+.admin-feedback-list li {
+  background: #f7faf8;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 13px;
+}
+.admin-feedback-list p {
+  font-size: 13.5px;
+  margin-top: 4px;
+  color: var(--ink);
+}
+.admin-login {
+  max-width: 360px;
+  margin: 90px auto;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.admin-login .brand {
+  justify-content: center;
+}
+.admin-login .brand svg {
+  color: var(--green);
+}
+.admin-login input {
+  font-size: 15px;
+}
+.admin-login .primary {
+  border-radius: 999px;
+}
+
+
 

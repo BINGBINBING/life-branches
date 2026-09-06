@@ -229,6 +229,104 @@ function Followup({
   );
 }
 
+function FeedbackCard({
+  jobId,
+  question,
+}: {
+  jobId: string | null;
+  question: string;
+}) {
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [phase, setPhase] = useState<'idle' | 'saving' | 'sent'>('idle');
+  const [error, setError] = useState('');
+
+  async function submit() {
+    if (rating < 1 || phase === 'saving') return;
+    setPhase('saving');
+    setError('');
+    try {
+      await request<{ ok: boolean }>('/api/branches/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rating,
+          comment,
+          question,
+          jobId,
+        }),
+      });
+      setPhase('sent');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '反馈提交失败。');
+      setPhase('idle');
+    }
+  }
+
+  if (phase === 'sent')
+    return (
+      <div className="feedback-card">
+        <p className="feedback-thanks">感谢反馈 🌱 我们会用你的意见改进体验。</p>
+        <button
+          type="button"
+          className="text-button"
+          onClick={() => setPhase('idle')}
+        >
+          再评一次
+        </button>
+      </div>
+    );
+
+  return (
+    <div className="feedback-card">
+      <div className="feedback-head">
+        <strong>这次体验如何？</strong>
+        <span>1–5 星 + 可选评论</span>
+      </div>
+      <div className="star-row" aria-label="评分">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            aria-label={`${n} 星`}
+            aria-pressed={rating === n}
+            className={rating >= n ? 'on' : ''}
+            onClick={() => setRating(n)}
+          >
+            ★
+          </button>
+        ))}
+      </div>
+      {rating > 0 && (
+        <>
+          <textarea
+            rows={2}
+            maxLength={2000}
+            value={comment}
+            placeholder="想说点什么？（可选）"
+            onChange={(e) => setComment(e.target.value)}
+          />
+          <div className="feedback-actions">
+            <button
+              type="button"
+              className="primary"
+              disabled={phase === 'saving'}
+              onClick={() => void submit()}
+            >
+              {phase === 'saving' ? '提交中…' : '提交反馈'}
+            </button>
+          </div>
+        </>
+      )}
+      {error && (
+        <p className="inline-error" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ProfileDialog({
   profile,
   onClose,
@@ -1227,6 +1325,10 @@ export default function Workspace() {
                       <SlidersHorizontal size={16} />
                       修改已填写条件
                     </button>
+                    <FeedbackCard
+                      jobId={job?.id ?? null}
+                      question={profile.question}
+                    />
                   </aside>
                 </div>
               ) : (
@@ -1293,6 +1395,15 @@ export default function Workspace() {
                 {Boolean(job?.result?.rejected) && (
                   <span>已移除 {job?.result?.rejected} 项无有效引用的分析</span>
                 )}
+                <button
+                  type="button"
+                  className="admin-entry"
+                  onClick={() => {
+                    window.location.href = '/admin';
+                  }}
+                >
+                  数据后台
+                </button>
               </footer>
             </>
           )}
