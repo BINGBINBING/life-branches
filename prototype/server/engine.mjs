@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { analysisProvider, deepseekJSON } from './deepseek.mjs';
 
 const exec = promisify(execFile);
 const binary =
@@ -76,6 +77,7 @@ export function parseModel(text) {
 }
 
 async function ask(prompt) {
+  if (analysisProvider() === 'deepseek') return deepseekJSON(prompt);
   const result = await cli([
     'answer',
     '--query',
@@ -85,7 +87,10 @@ async function ask(prompt) {
     '--timeout',
     '150s',
   ]);
-  return parseModel(result.choices?.[0]?.message?.content);
+  return {
+    value: parseModel(result.choices?.[0]?.message?.content),
+    metadata: { provider: 'zhihu', model: 'zhida-fast-1p5' },
+  };
 }
 
 export function profileText(profile) {
@@ -336,7 +341,7 @@ export function validateAnalysis(raw, sources, profile) {
   return { paths, insights, questions, rejected, analyzedAt: Date.now() };
 }
 
-export async function analyze(sources, profile, progress) {
+export async function analyze(sources, profile, progress, options = {}) {
   if (!sources.length)
     return {
       paths: [],
@@ -364,7 +369,14 @@ questions最多2个，只问来源里明确存在、用户尚未说明、能影�
 格式：{"paths":[{"name":"行动方式","cases":[{"sourceId":"S1","kind":"self或retold或advice或promotion","background":{"text":"背景概括","quote":"连续原文"},"action":{"text":"具体行动","quote":"连续原文"},"outcome":{"text":"阶段结果","quote":"连续原文"},"result":"success或setback或mixed或unknown","comparison":{"text":"相似点或差异及其限制","status":"different","quote":"案例连续原文","userQuote":"用户连续原文"},"missing":["来源未写明的条件"]}]}],"insights":[{"type":"practice或risk","title":"简短标题","text":"具体解释与限制","sourceId":"S1","quote":"连续原文"}],"questions":[{"question":"用户条件问题","reason":"影响判断的原因","sourceId":"S1","quote":"连续原文","options":["选项1","选项2"]}]}
 用户信息：${JSON.stringify({ ...profile, fullText: profileText(profile) })}
 给定来源：${JSON.stringify(supplied)}`;
-  const raw = await ask(prompt);
+  const raw = await ask(
+    prompt +
+      '\n额外约束：完成项目或部署不等于成功就业；电子信息专业不等于有编程基础。result 的 success 必须由目标阶段的明确成果支持。路径名称不允许加入未经原文确认的在职/脱产状态。missing 不得询问是否愿意伪造经验等不诚信行为。',
+  );
+  await options.onRaw?.(raw);
   progress('正在逐条检查引用是否存在于原始片段…');
-  return validateAnalysis(raw, sources, profile);
+  return {
+    ...validateAnalysis(raw.value, sources, profile),
+    analysis: raw.metadata,
+  };
 }

@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { analyze, search, validProfile, cli } from './engine.mjs';
 import { curatedArchive } from './archive-annotations.mjs';
+import { analysisProvider, requiredQuotaIds } from './deepseek.mjs';
 
 const jobs = new Map();
 let active = 0;
@@ -68,8 +69,11 @@ export function localApi() {
             return send(res, 200, {
               ok: true,
               mode: 'local',
-              provider: 'zhihu',
-              quota,
+              provider: analysisProvider(),
+              quota:
+                quota?.filter((q) =>
+                  requiredQuotaIds(false).includes(q.APIID),
+                ) ?? null,
               archive,
             });
           }
@@ -139,9 +143,7 @@ export function localApi() {
           if (jobs.size >= 30)
             return send(res, 429, { error: '当前探索记录已满，请稍后重试。' });
           if (quota && Date.now() - quotaAt < 60000) {
-            const needed = input.previousId
-              ? ['zhida_openai']
-              : ['zhihu_search', 'zhida_openai'];
+            const needed = requiredQuotaIds(Boolean(input.previousId));
             if (
               quota.some(
                 (q) => needed.includes(q.APIID) && q.RemainingQuota <= 0,
