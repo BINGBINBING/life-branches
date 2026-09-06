@@ -345,6 +345,14 @@ export default function Workspace() {
     quota: { APIID: string; RemainingQuota: number }[] | null;
     archive: boolean;
   } | null>(null);
+  const [showKeys, setShowKeys] = useState(false);
+  const [zhihuKeyDraft, setZhihuKeyDraft] = useState('');
+  const [aiKeyDraft, setAiKeyDraft] = useState('');
+  const [overrideStatus, setOverrideStatus] = useState<{
+    zhihu: string | null;
+    ai: string | null;
+  } | null>(null);
+  const [keysSaving, setKeysSaving] = useState(false);
   const controller = useRef<AbortController | null>(null);
   const activeRequest = useRef(false);
   const snapshot = useRef({ profile, job });
@@ -383,6 +391,40 @@ export default function Workspace() {
       setError(e instanceof Error ? e.message : '历史样本暂不可用。');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function refreshOverrides() {
+    try {
+      const s = await request<{
+        provider: string;
+        devOverride: { zhihu: string | null; ai: string | null };
+      }>('/api/branches/settings');
+      setOverrideStatus(s.devOverride);
+    } catch {
+      setOverrideStatus(null);
+    }
+  }
+
+  async function saveTempKey(kind: 'zhihu' | 'ai', value: string) {
+    setKeysSaving(true);
+    setError('');
+    try {
+      const s = await request<{
+        ok: boolean;
+        devOverride: { zhihu: string | null; ai: string | null };
+      }>('/api/branches/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: kind, value }),
+      });
+      if (kind === 'zhihu') setZhihuKeyDraft('');
+      else setAiKeyDraft('');
+      setOverrideStatus(s.devOverride);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '保存密钥失败。');
+    } finally {
+      setKeysSaving(false);
     }
   }
 
@@ -559,6 +601,19 @@ export default function Workspace() {
             <span className="live-dot" />
             知乎公开内容
           </span>
+          <button
+            aria-haspopup="dialog"
+            aria-expanded={showKeys}
+            onClick={() => {
+              setShowKeys((v) => !v);
+              if (!showKeys) void refreshOverrides();
+            }}
+            title="开发期临时切换密钥"
+            className="key-toggle"
+          >
+            <SlidersHorizontal size={15} />
+            开发者密钥
+          </button>
           {step === 'explore' && (
             <button
               disabled={busy}
@@ -574,6 +629,59 @@ export default function Workspace() {
             </button>
           )}
         </div>
+        {showKeys && (
+          <section
+            className="key-panel"
+            aria-label="开发期临时密钥"
+          >
+            <div className="key-panel-title">
+              <strong>开发期临时密钥</strong>
+              <span>仅保存在本服务进程内存，刷新 / 重启即清除</span>
+            </div>
+            <label className="key-field">
+              <span>知乎 Access Secret {overrideStatus?.zhihu ? <em>（已注入 {overrideStatus.zhihu}）</em> : <em>（未注入 → 用本机默认）</em>}</span>
+              <input
+                type="password"
+                autoComplete="off"
+                value={zhihuKeyDraft}
+                placeholder="留空并点清除则恢复本机 keychain"
+                onChange={(e) => setZhihuKeyDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void saveTempKey('zhihu', zhihuKeyDraft);
+                  }
+                }}
+              />
+              <div className="key-actions">
+                <button disabled={keysSaving} onClick={() => void saveTempKey('zhihu', zhihuKeyDraft)}>
+                  {zhihuKeyDraft ? '注入该密钥' : '清除（用本机默认）'}
+                </button>
+              </div>
+            </label>
+            <label className="key-field">
+              <span>搜索 / 分析 AI Key（DeepSeek 等）{overrideStatus?.ai ? <em>（已注入 {overrideStatus.ai}）</em> : <em>（未注入 → 用 .env.local / 环境变量）</em>}</span>
+              <input
+                type="password"
+                autoComplete="off"
+                value={aiKeyDraft}
+                placeholder="留空并点清除则回退服务端配置"
+                onChange={(e) => setAiKeyDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void saveTempKey('ai', aiKeyDraft);
+                  }
+                }}
+              />
+              <div className="key-actions">
+                <button disabled={keysSaving} onClick={() => void saveTempKey('ai', aiKeyDraft)}>
+                  {aiKeyDraft ? '注入该密钥' : '清除（用服务端配置）'}
+                </button>
+              </div>
+            </label>
+          </section>
+        )}
       </header>
       {step !== 'explore' ? (
         <main className="start-page">

@@ -1069,6 +1069,7 @@ label {
   margin-bottom: 8px;
 }
 .topbar {
+  position: relative;
   height: 76px;
   display: flex;
   align-items: center;
@@ -1173,3 +1174,90 @@ label {
     margin-top: 40px;
   }
 }
+
+/* ---- 开发期临时密钥面板 ---- */
+.key-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.key-toggle:hover {
+  color: var(--green);
+  border-color: var(--green);
+}
+.key-panel {
+  position: absolute;
+  top: 64px;
+  right: 40px;
+  z-index: 60;
+  width: min(520px, calc(100vw - 48px));
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  padding: 16px;
+}
+.key-panel-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+.key-panel-title strong {
+  font-size: 15px;
+  color: var(--ink);
+}
+.key-panel-title span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.key-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.key-field > span {
+  font-size: 13px;
+  color: var(--ink);
+}
+.key-field em {
+  font-style: normal;
+  color: var(--green);
+  font-size: 12px;
+}
+.key-field input[type='password'] {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+}
+.key-field input:focus {
+  outline: 1px solid var(--green);
+}
+.key-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+.key-actions button {
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.key-actions button:hover:not(:disabled) {
+  border-color: var(--green);
+  color: var(--green);
+}
+
