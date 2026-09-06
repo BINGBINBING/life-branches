@@ -15,6 +15,8 @@ npm start
 
 应用使用当前机器的系统安全凭证库，不需要把密钥复制到代码或前端。CLI 会按平台自动探测官方默认安装位置（Windows：`%LOCALAPPDATA%\ZhihuCLI\current\zhihu-cli.exe`；macOS：`~/Library/Application Support/zhihu-cli/current/zhihu-cli`）；非默认路径可通过 `ZHIHU_CLI_PATH` 指定二进制绝对路径，或设置 `ZHIHU_CLI_HOME` 指向安装根目录。
 
+**生产 / 云端运行**：设置 `ZHIHU_ACCESS_SECRET` 后，知乎检索会走官方 HTTP API 直连（`server/zhihu-http.mjs`），不再需要本机 zhihu-cli，适合云端或无 CLI 环境。生产形态可先 `npm run build`，再 `PORT=8080 node standalone-server.mjs` 在同一端口提供页面与 `/api/branches/*`（详见仓库根 README「生产运行」）。
+
 **Windows 提示**：若 PowerShell 执行策略阻止 `npm`，请改用 `npm.cmd` 执行所有命令。
 
 ## 数据与分析

@@ -10,6 +10,7 @@
 - **行动路径结果页**：路径导航、经验详情、逐条原文引用、正反对照、动态补问、条件修改后复用来源重新分析。
 - **历史样本**：无需知乎凭证即可体验的固定样本。
 - **搜索结果缓存**：查询结果先查内存（1h）与磁盘 `.local/search-cache.jsonl`（24h），未命中才调用知乎 CLI 并写盘——同一 / 相似探索跨进程、跨重启也能复用，省额度。
+- **知乎检索双通道**：配置了 `ZHIHU_ACCESS_SECRET` 时走官方 HTTP API 直连（云端/无 zhihu-cli 环境可用）；未配置则回退本地 zhihu-cli，逻辑共用、行为向后兼容。
 - **浏览器历史探索**：每次成功的探索自动把结果快照保存到浏览器 `localStorage`（本机最多 20 条），顶栏「我的结果」随时回看、可删除，刷新 / 换会话仍在。
 - **用户反馈**：结果页右栏 1–5 星评分 + 可选评论，提交后由管理员在数据后台查看。
 - **开发者密钥面板**：顶栏「开发者密钥」，开发期可临时注入知乎 Access Secret 或分析 AI Key（DeepSeek），用于轮换账号/额度受限时调试；仅存进程内存，刷新 / 重启即清除，不影响本机 keychain 与 `.env.local`。
@@ -70,9 +71,25 @@ npm run build
 
 默认测试不消耗知乎额度。真实调用测试须手动运行，会使用执行者的额度。`.local`、`.env*`、凭证、缓存与构建产物不提交。
 
+## 生产运行（方案乙：自管 Node 服务器）
+
+如果不想依赖 Cloudflare Worker（需要 D1/无本地磁盘限制），可以在这类"有自己的文件系统、能跑完整 Node"的服务器上原样部署：
+
+```sh
+cd prototype
+npm run build                       # 产出 dist/
+PORT=8080 node standalone-server.mjs
+```
+
+- `standalone-server.mjs` 用与本地开发**同一份** `server/api.mjs` 后端 + `dist/client` 页面产物，单端口提供页面与 `/api/branches/*`，无需改动业务代码。
+- 服务器环境变量：`ZHIHU_ACCESS_SECRET`（HTTP 直连知乎；设置后不再需要本机 zhihu-cli）、可选 `DEEPSEEK_API_KEY`、必设强 `ADMIN_PASSWORD`。
+- `.local/*.jsonl`（反馈/用量/搜索缓存）落在服务器磁盘，重启不丢。
+- 进程守护建议 pm2 或 systemd；对外可先 IP:端口评审，再绑域名 + Caddy/nginx 提供 HTTPS。
+- 本仓库已按此形态在本地验证：首页 `/`、`/admin`、静态资源、health/settings/feedback/admin 接口均返回正常。
+
 ## 上云 / 部署注意
 
-- 生产构建不包含本机 CLI 后端；云端检索需替换为 HTTP 直连或服务端适配（凭证只放服务端）。
+- 生产构建产物只有页面（含 SSR）；`/api/branches/*` 由本地 dev 中间件或上面的 standalone 服务提供。若走 Cloudflare Worker 部署，需把 `server/api.mjs` 的 localApi 路由改造成 worker fetch 入口、并把 `.local` 存储换成 D1/KV（当前 `zhihu-http.mjs` 已让检索不依赖本机 CLI）。
 - **必须设置强 `ADMIN_PASSWORD`**，否则后台使用默认密码。
 - `storage.mjs` 当前是本地 JSONL 实现；上云时替换为同一接口的 KV/数据库实现即可，调用方无需改动（含 `.local/search-cache.jsonl` 的搜索缓存，可换云端 KV 以在无状态多实例间共享命中）。
 - "浏览器历史探索"利用 `localStorage`，属**单浏览器私有快照**，天然不上云、不出设备；如需跨设备/跨用户云历史，需另行把快照提交到服务端。
