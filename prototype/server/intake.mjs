@@ -149,6 +149,29 @@ function safeCode(value, allowed, fallback) {
   return allowed.includes(value) ? value : fallback;
 }
 
+function extractedPrefills(question, raw, candidates) {
+  const allowed = new Set(candidates.map((item) => item.id));
+  const values = new Map();
+  const extracted = Array.isArray(raw.extracted) ? raw.extracted : [];
+  for (const item of extracted.slice(0, 12)) {
+    const id = typeof item?.conditionId === 'string' ? item.conditionId : '';
+    const value = typeof item?.value === 'string' ? item.value.trim() : '';
+    const quote = typeof item?.quote === 'string' ? item.quote.trim() : '';
+    if (
+      !allowed.has(id) ||
+      !value ||
+      value.length > 400 ||
+      !quote ||
+      quote.length > 240 ||
+      !question.includes(quote) ||
+      !quote.toLowerCase().includes(value.toLowerCase())
+    )
+      continue;
+    values.set(id, { initialValue: value, initialQuote: quote });
+  }
+  return values;
+}
+
 function prefill(question, id) {
   if (id === 'gpa_value') {
     const match = question.match(/(?:绩点|GPA)\s*(\d+(?:\.\d+)?)/i);
@@ -226,13 +249,20 @@ export function normalizeIntake(question, raw = {}) {
   const candidates = candidateConditions({ scope, path, sector });
   const byId = new Map(candidates.map((item) => [item.id, item]));
   const requested = Array.isArray(raw.fieldIds) ? raw.fieldIds : [];
+  const extracted = extractedPrefills(question, raw, candidates);
   const fallback = priorities[path] || priorities[scope] || [];
   const anchors = comparisonAnchors[path] || comparisonAnchors[scope] || [];
   const prefilled = candidates
     .filter((item) => Object.keys(prefill(question, item.id)).length > 0)
     .map((item) => item.id);
   const selected = [];
-  for (const id of [...prefilled, ...anchors, ...requested, ...fallback]) {
+  for (const id of [
+    ...prefilled,
+    ...extracted.keys(),
+    ...anchors,
+    ...requested,
+    ...fallback,
+  ]) {
     const item = byId.get(id);
     if (!item || selected.some((field) => field.id === id)) continue;
     if (item.policy.voluntary_only && !requested.includes(id)) continue;
@@ -242,6 +272,7 @@ export function normalizeIntake(question, raw = {}) {
       question: item.question,
       answerType: item.policy.answer_type || 'text',
       group: item.group,
+      ...extracted.get(item.id),
       ...prefill(question, item.id),
     });
     if (selected.length === 6) break;
@@ -269,11 +300,12 @@ export async function createIntakePlan(question, options = {}) {
     );
   const prompt = `\u4f60\u5728\u4e3a“\u8f6c\u4e13\u4e1a / \u8f6c\u884c”\u7ecf\u9a8c\u68c0\u7d22\u751f\u6210\u641c\u7d22\u524d\u6761\u4ef6\u8868\u5355\u3002
 \u7528\u6237\u539f\u8bdd\uff1a${JSON.stringify(question.trim())}
-\u4ec5\u8fd4\u56de JSON\uff1a{"scope":"major_transition|career_transition|unsupported","path":"campus_transfer|cross_major_graduate|minor|second_bachelor|career_change","sector":"industrial|design|accounting|sales|education|software|operations|other","fieldIds":["\u6761\u4ef6ID"]}
+\u4ec5\u8fd4\u56de JSON\uff1a{"scope":"major_transition|career_transition|unsupported","path":"campus_transfer|cross_major_graduate|minor|second_bachelor|career_change","sector":"industrial|design|accounting|sales|education|software|operations|other","fieldIds":["\u6761\u4ef6ID"],"extracted":[{"conditionId":"\u6761\u4ef6ID","value":"\u7528\u4e8e\u8868\u5355\u7684\u7b80\u77ed\u503c","quote":"\u7528\u6237\u539f\u8bdd\u4e2d\u7684\u8fde\u7eed\u7247\u6bb5"}]}
 \u89c4\u5219\uff1a
 1. \u5f53\u524d\u4ec5\u652f\u6301\u8f6c\u4e13\u4e1a\u548c\u8f6c\u884c / \u8f6c\u5c97\uff0c\u5176\u4ed6\u4e3b\u9898\u6807\u8bb0 unsupported\u3002
 2. \u9009 4–6 \u4e2a\u6700\u5f71\u54cd\u9996\u8f6e\u68c0\u7d22\u4e0e\u7ecf\u9a8c\u53ef\u6bd4\u6027\u7684\u5b57\u6bb5\u3002
 3. \u53ea\u80fd\u9009\u76ee\u5f55\u4e2d\u7684 id\uff0c\u4e0d\u751f\u6210\u95ee\u9898\u6587\u6848\uff0c\u4e0d\u63a8\u65ad\u7528\u6237\u672a\u8bf4\u7684\u6761\u4ef6\u3002
+4. extracted \u53ea\u653e\u7528\u6237\u5df2\u660e\u786e\u8bf4\u51fa\u7684\u503c\uff1bquote \u5fc5\u987b\u662f\u7528\u6237\u539f\u8bdd\u4e2d\u5b8c\u5168\u4e00\u81f4\u7684\u8fde\u7eed\u7247\u6bb5\u3002\u6ca1\u8bf4\u7684\u6761\u4ef6\u4e0d\u586b\u3002
 \u6761\u4ef6\u76ee\u5f55\uff1a${JSON.stringify(catalogue())}`;
   const ask = options.ask || ((value) => deepseekJSON(value));
   const result = await ask(prompt);

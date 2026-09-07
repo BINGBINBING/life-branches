@@ -257,59 +257,99 @@ function ExperienceCard({
   );
 }
 
-function Followup({
-  question,
-  onAnswer,
-  onSkip,
+function DynamicConditionForm({
+  questions,
+  onSubmit,
   onSource,
 }: {
-  question: Question;
-  onAnswer: (answer: string) => void;
-  onSkip: () => void;
-  onSource: () => void;
+  questions: Question[];
+  onSubmit: (answers: Record<string, string>, skipped: string[]) => void;
+  onSource: (sourceId: string) => void;
 }) {
-  const [answer, setAnswer] = useState('');
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [skipped, setSkipped] = useState<string[]>([]);
+  const update = (question: string, answer: string) => {
+    setAnswers((current) => ({ ...current, [question]: answer }));
+    setSkipped((current) => current.filter((item) => item !== question));
+  };
+  const hasChanges =
+    Object.values(answers).some((answer) => answer.trim()) ||
+    skipped.length > 0;
   return (
-    <div className="followup">
-      <h4>{question.question}</h4>
-      <p>{question.reason}</p>
-      <button className="text-button" onClick={onSource}>
-        查看相关经历 <ArrowUpRight size={14} />
-      </button>
-      <div className="answer-options">
-        {question.options.map((option) => (
-          <button
-            key={option}
-            className={answer === option ? 'selected' : ''}
-            onClick={() => setAnswer(option)}
-          >
-            {option}
-          </button>
-        ))}
-      </div>
-      <label className="sr-only" htmlFor={`answer-${question.sourceId}`}>
-        补充你的情况
-      </label>
-      <input
-        id={`answer-${question.sourceId}`}
-        value={answer}
-        maxLength={400}
-        onChange={(e) => setAnswer(e.target.value)}
-        placeholder="也可以补充自己的情况"
-      />
+    <form
+      className="dynamic-condition-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit(answers, skipped);
+      }}
+    >
+      {questions.map((question) => {
+        const answer = answers[question.question] || '';
+        const isSkipped = skipped.includes(question.question);
+        return (
+          <fieldset className="followup" key={question.question}>
+            <legend>{question.question}</legend>
+            <p>{question.reason}</p>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => onSource(question.sourceId)}
+            >
+              查看相关经历 <ArrowUpRight size={14} />
+            </button>
+            <div className="answer-options">
+              {question.options.map((option) => (
+                <button
+                  type="button"
+                  key={option}
+                  className={answer === option ? 'selected' : ''}
+                  onClick={() => update(question.question, option)}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+            <label className="sr-only" htmlFor={`answer-${question.sourceId}`}>
+              补充你的情况
+            </label>
+            <input
+              id={`answer-${question.sourceId}`}
+              value={answer}
+              maxLength={400}
+              disabled={isSkipped}
+              onChange={(event) =>
+                update(question.question, event.target.value)
+              }
+              placeholder="也可以补充自己的情况"
+            />
+            <label className="followup-skip">
+              <input
+                type="checkbox"
+                checked={isSkipped}
+                onChange={(event) => {
+                  setSkipped((current) =>
+                    event.target.checked
+                      ? [...new Set([...current, question.question])]
+                      : current.filter((item) => item !== question.question),
+                  );
+                  if (event.target.checked)
+                    setAnswers((current) => ({
+                      ...current,
+                      [question.question]: '',
+                    }));
+                }}
+              />
+              本轮暂不回答
+            </label>
+          </fieldset>
+        );
+      })}
       <div className="followup-actions">
-        <button
-          className="primary"
-          disabled={!answer.trim()}
-          onClick={() => onAnswer(answer)}
-        >
-          补充并更新 <ArrowRight size={15} />
-        </button>
-        <button className="text-button" onClick={onSkip}>
-          暂时跳过
+        <button className="primary" disabled={!hasChanges}>
+          更新条件对照 <ArrowRight size={15} />
         </button>
       </div>
-    </div>
+    </form>
   );
 }
 
@@ -677,6 +717,13 @@ function IntakeFields({
           <span>
             {field.label}
             <small className="meta">{field.group}</small>
+            <small
+              className={`intake-field-status ${
+                field.initialValue ? 'recognized' : 'unanswered'
+              }`}
+            >
+              {field.initialValue ? '已从描述识别，请确认' : '需要补充'}
+            </small>
           </span>
           {field.answerType === 'multi_select' ? (
             <div className="multi-select-field">
@@ -807,18 +854,7 @@ export default function Workspace() {
   const [profile, setProfile] = useState<Profile>(emptyProfile);
   const [step, setStep] = useState<'start' | 'conditions' | 'explore'>('start');
   const [intake, setIntake] = useState<IntakePlan | null>(null);
-  // 首屏六字段（仿 demo）：年龄 / 学历 / 城市 / 当前 / 材料 / 想走方向
-  const [firstForm, setFirstFormState] = useState({
-    age: '',
-    edu: '', // 空则给下拉默认
-    city: '',
-    current: '',
-    materials: '',
-    target: '',
-  });
-  const setFirstForm = (patch: Partial<typeof firstForm>) =>
-    setFirstFormState((s) => ({ ...s, ...patch }));
-  const firstFormValid = () => firstForm.target.trim().length >= 2; // 最低：有一个想走的方向
+  const [starterText, setStarterText] = useState('');
   const [job, setJob] = useState<Job | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -1057,7 +1093,7 @@ export default function Workspace() {
           decisionPath: plan.path,
           decisionSector: plan.sector,
           conditionAnswers: {
-          ...seed.conditionAnswers,
+            ...seed.conditionAnswers,
             ...Object.fromEntries(
               plan.fields
                 .filter((field) => field.initialValue)
@@ -1257,14 +1293,7 @@ export default function Workspace() {
     controller.current?.abort();
     setStep('start');
     setProfile(emptyProfile);
-    setFirstFormState({
-      age: '',
-      edu: '',
-      city: '',
-      current: '',
-      materials: '',
-      target: '',
-    });
+    setStarterText('');
     setJob(null);
     setBusy(false);
     setError('');
@@ -1437,116 +1466,53 @@ export default function Workspace() {
           </h1>
           {step === 'start' ? (
             <>
-              <form
-                className="question-form start-form"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!firstFormValid()) return;
-                  const bg = [
-                    firstForm.age.trim() ? `${firstForm.age.trim()} 岁` : '',
-                    firstForm.edu || '',
-                    firstForm.city.trim() ? `在${firstForm.city.trim()}` : '',
-                    firstForm.current.trim()
-                      ? `目前是${firstForm.current.trim()}`
-                      : '',
-                    firstForm.materials.trim()
-                      ? `已有：${firstForm.materials.trim()}`
-                      : '',
-                  ]
-                    .filter(Boolean)
-                    .join('，');
-                  const description = [firstForm.target.trim(), bg]
-                    .filter(Boolean)
-                    .join('，');
-                  void prepareIntake(description, {
-                    background: bg || profile.background,
-                  });
-                }}
-              >
-                <div className="field-grid">
-                  <label className="field-label span2">
-                    想探索的方向 / 目标
-                    <input
-                      required
-                      value={firstForm.target}
-                      placeholder="例如：转专业到计算机科学 / 转行做餐饮"
-                      onChange={(e) => setFirstForm({ target: e.target.value })}
-                    />
-                  </label>
-
-                  <p className="form-hint">
-                    请再补充一些你的情况，帮助我们更贴近你的处境。
+              <section className="intake-chat" aria-label="选择访谈">
+                <div className="chat-turn assistant-turn">
+                  <span className="chat-speaker">人生分枝</span>
+                  <p>
+                    说说你正在考虑的一个转专业或转行业选择。可以一起写下当前情况、目标、可投入时间和不能接受的代价。
                   </p>
-
-                  <label className="field-label">
-                    年龄
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={firstForm.age}
-                      placeholder="例如 18"
-                      onChange={(e) => setFirstForm({ age: e.target.value })}
-                    />
-                  </label>
-                  <label className="field-label">
-                    学历
-                    <input
-                      type="text"
-                      value={firstForm.edu}
-                      placeholder="例如：本科在读 / 硕士 / 高中毕业"
-                      onChange={(e) => setFirstForm({ edu: e.target.value })}
-                    />
-                  </label>
-                  <label className="field-label">
-                    所在城市
-                    <input
-                      value={firstForm.city}
-                      placeholder="例如 北京"
-                      onChange={(e) => setFirstForm({ city: e.target.value })}
-                    />
-                  </label>
-                  <label className="field-label">
-                    当前专业 / 行业
-                    <input
-                      value={firstForm.current}
-                      placeholder="例如：土木工程 / 电商运营"
-                      onChange={(e) =>
-                        setFirstForm({ current: e.target.value })
-                      }
-                    />
-                  </label>
-                  <label className="field-label span2">
-                    已掌握的资料 / 背景（可选）
-                    <input
-                      value={firstForm.materials}
-                      placeholder="例如：无 / 会 C 语言 / 有竞赛经历…"
-                      onChange={(e) =>
-                        setFirstForm({ materials: e.target.value })
-                      }
-                    />
-                  </label>
                 </div>
-                <div className="form-footer">
-                  <span className="muted">
-                    第二步会需要补充投入时间与限制（选填）
-                  </span>
-                  <button
-                    className="primary"
-                    disabled={busy || !firstFormValid()}
-                  >
-                    {busy ? (
-                      <>
-                        <LoaderCircle className="spin" size={17} />
-                        生成条件表单
-                      </>
-                    ) : (
-                      <>
-                        继续探索 <ArrowRight size={18} />
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
+                <form
+                  className="chat-composer"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (starterText.trim().length >= 2)
+                      void prepareIntake(starterText.trim());
+                  }}
+                >
+                  <label className="sr-only" htmlFor="starter-message">
+                    描述你正在考虑的选择
+                  </label>
+                  <textarea
+                    id="starter-message"
+                    required
+                    minLength={2}
+                    maxLength={240}
+                    value={starterText}
+                    placeholder="例如：我本科读市场营销，工作三年后想转行做产品经理。目前在职，每天能投入两小时，希望半年内完成转型。"
+                    onChange={(e) => setStarterText(e.target.value)}
+                  />
+                  <div className="composer-footer">
+                    <span>{starterText.length}/240</span>
+                    <button
+                      className="primary"
+                      disabled={busy || starterText.trim().length < 2}
+                    >
+                      {busy ? (
+                        <>
+                          <LoaderCircle className="spin" size={17} />
+                          正在理解
+                        </>
+                      ) : (
+                        <>
+                          发送 <ArrowRight size={18} />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </section>
               {availability?.archive && (
                 <button
                   className="archive-entry"
@@ -1609,9 +1575,7 @@ export default function Workspace() {
                     <button
                       key={choice}
                       onClick={() => {
-                        // 示例作为可编辑起点：直接回填到首屏的目标/当前，不绕开表单。
-                        setFirstForm({ target: choice });
-                        setProfile({ ...profile, question: choice });
+                        setStarterText(choice);
                       }}
                       disabled={busy}
                     >
@@ -1633,44 +1597,71 @@ export default function Workspace() {
             </>
           ) : (
             <>
-              <p className="current-question">{profile.question}</p>
-              <p className="muted">
-                {intake?.message || '先补充影响检索的条件，不确定的可以留空。'}
-              </p>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void explore(profile);
-                }}
-              >
-                {intake && (
-                  <IntakeFields
-                    plan={intake}
-                    profile={profile}
-                    onChange={setProfile}
-                  />
-                )}
-                <div className="form-footer">
-                  <button
-                    type="button"
-                    className="text-button"
-                    onClick={() => {
-                      // 返回首屏时保留目标，避免表单被清空
-                      if (profile.question.trim() && !firstForm.target.trim())
-                        setFirstForm({ target: profile.question });
-                      setStep('start');
-                      setIntake(null);
-                    }}
-                  >
-                    <ArrowLeft size={16} />
-                    修改选择
-                  </button>
-                  <button className="primary">
-                    <Search size={17} />
-                    搜索真实经历
-                  </button>
+              <section className="intake-chat intake-review" aria-live="polite">
+                <div className="chat-turn user-turn">
+                  <span className="chat-speaker">你</span>
+                  <p>{profile.question}</p>
                 </div>
-              </form>
+                <div className="chat-turn assistant-turn">
+                  <span className="chat-speaker">人生分枝</span>
+                  <p>
+                    我已经把你明确说出的条件录入表单。请集中补充仍为空的基础条件，并检查自动填写是否准确。
+                  </p>
+                  {intake && (
+                    <div className="intake-summary">
+                      <span>
+                        已识别{' '}
+                        {
+                          intake.fields.filter((field) => field.initialValue)
+                            .length
+                        }{' '}
+                        项
+                      </span>
+                      <span>
+                        待补充{' '}
+                        {
+                          intake.fields.filter((field) => !field.initialValue)
+                            .length
+                        }{' '}
+                        项
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <form
+                  className="intake-form"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void explore(profile);
+                  }}
+                >
+                  {intake && (
+                    <IntakeFields
+                      plan={intake}
+                      profile={profile}
+                      onChange={setProfile}
+                    />
+                  )}
+                  <div className="form-footer">
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => {
+                        setStarterText(profile.question);
+                        setStep('start');
+                        setIntake(null);
+                      }}
+                    >
+                      <ArrowLeft size={16} />
+                      修改描述
+                    </button>
+                    <button className="primary">
+                      <Search size={17} />
+                      确认并搜索知乎
+                    </button>
+                  </div>
+                </form>
+              </section>
             </>
           )}
         </main>
@@ -2066,40 +2057,34 @@ export default function Workspace() {
                   <aside className="questions-sidebar">
                     <div className="sidebar-heading">
                       <CircleHelp size={18} />
-                      <h2>还需确认</h2>
+                      <h2>根据新经历补充条件</h2>
                     </div>
                     {questions.length ? (
-                      questions.map((q) => (
-                        <Followup
-                          key={q.question}
-                          question={q}
-                          onSource={() => jump(q.sourceId)}
-                          onSkip={() =>
-                            setProfile({
+                      <DynamicConditionForm
+                        questions={questions}
+                        onSource={jump}
+                        onSubmit={(answers, skipped) => {
+                          const conditionAnswers = {
+                            ...profile.conditionAnswers,
+                          };
+                          for (const question of questions) {
+                            const answer = answers[question.question]?.trim();
+                            if (answer && question.conditionId)
+                              conditionAnswers[question.conditionId] = answer;
+                          }
+                          void explore(
+                            {
                               ...profile,
-                              skipped: [...profile.skipped, q.question],
-                            })
-                          }
-                          onAnswer={(answer) =>
-                            void explore(
-                              {
-                                ...profile,
-                                conditionAnswers: q.conditionId
-                                  ? {
-                                      ...profile.conditionAnswers,
-                                      [q.conditionId]: answer,
-                                    }
-                                  : profile.conditionAnswers,
-                                answers: {
-                                  ...profile.answers,
-                                  [q.question]: answer,
-                                },
-                              },
-                              job?.id,
-                            )
-                          }
-                        />
-                      ))
+                              conditionAnswers,
+                              answers: { ...profile.answers, ...answers },
+                              skipped: [
+                                ...new Set([...profile.skipped, ...skipped]),
+                              ],
+                            },
+                            job?.id,
+                          );
+                        }}
+                      />
                     ) : (
                       <div className="no-questions">
                         <CheckCircle2 size={22} />
