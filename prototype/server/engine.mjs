@@ -32,6 +32,12 @@ import {
   compareTime,
   timeQuestion,
 } from './evidence-policy.mjs';
+import { getCachedSearch, putCachedSearch } from './storage.mjs';
+import {
+  searchZhihu as httpSearchZhihu,
+  queryQuota as httpQueryQuota,
+  chatCompletions as httpChatCompletions,
+} from './zhihu-http.mjs';
 
 const exec = promisify(execFile);
 export const SEARCH_CALL_LIMIT = 5;
@@ -41,6 +47,7 @@ export const SOURCE_LIMIT = SEARCH_CALL_LIMIT * SEARCH_RESULT_LIMIT;
 export const DETAILED_CASE_LIMIT = 8;
 
 // zhihu-cli 可执行文件路径：可被环境变量覆盖；否则按当前平台探测常见安装位置。
+// 支持 ZHIHU_CLI_HOME / ZHIHU_CLI_PATH，并通过参数注入便于隔离测试。
 export function resolveCliBinary({
   env = process.env,
   os = platform(),
@@ -80,6 +87,86 @@ export function resolveCliBinary({
 
 const binary = resolveCliBinary();
 const cache = new Map();
+
+// ---- 开发期临时凭证覆盖（仅内存，进程结束即失效；绝不写盘/日志） ----
+const tempOverrides = { zhihuSecret: null, aiKey: null };
+
+/** 开发状态临时注入某类 key；传 undefined/null 意为清除该项。返回脱敏摘要供界面回读。 */
+export function setTempCredential(kind, value) {
+  const key =
+    kind === 'zhihu' || kind === 'zhihuSecret'
+      ? 'zhihuSecret'
+      : kind === 'ai' || kind === 'aiKey'
+        ? 'aiKey'
+        : null;
+  if (!key) throw new Error('未知的凭证类型。');
+  if (value == null || value === '') tempOverrides[key] = null;
+  else tempOverrides[key] = String(value).trim();
+  if (!tempOverrides[key]) tempOverrides[key] = null;
+  return summarizeTempCredentials();
+}
+
+export function summaryCredentialStatus() {
+  return summarizeTempCredentials();
+}
+
+function summarizeTempCredentials() {
+  return {
+    zhihu: tempOverrides.zhihuSecret
+      ? setActiveLabel(tempOverrides.zhihuSecret)
+      : null,
+    ai: tempOverrides.aiKey ? setActiveLabel(tempOverrides.aiKey) : null,
+  };
+}
+
+// 仅做脱敏前缀展示，不回显完整密钥。
+function setActiveLabel(value) {
+  const s = String(value || '');
+  return s.length > 6 ? `${s.slice(0, 3)}…${s.slice(-3)}` : '•••';
+}
+
+// ---- 知乎后端选择：HTTP 直连优先，未配置 Secret 时回退本地 CLI ----
+// 便于云端（无 zhihu-cli）与本地开发共用同一套 engine。
+function httpSecret() {
+  return tempOverrides.zhihuSecret ?? process.env.ZHIHU_ACCESS_SECRET ?? '';
+}
+function zhihuHttpAvailable() {
+  return Boolean(httpSecret());
+}
+
+// 把 HTTP provider 的错误翻译成与本地 CLI 一致的可见文案。
+function zhihuErrorToMessage(e) {
+  const m = String(e?.message ?? '');
+  if (m.includes('RATE') || m === 'QUOTA')
+    return '知乎额度不足或请求受限，已停止调用。请查看开放平台用量，额度恢复后再试。';
+  if (m.includes('AUTH'))
+    return '知乎凭证无效，请检查 ZHIHU_ACCESS_SECRET 配置。';
+  return '知乎服务暂时无法完成请求，请检查连接或稍后重试。';
+}
+
+async function zhihuBackendSearch(query, count = 5) {
+  if (zhihuHttpAvailable()) {
+    try {
+      return await httpSearchZhihu(query, count, { secret: httpSecret() });
+    } catch (e) {
+      throw new Error(zhihuErrorToMessage(e));
+    }
+  }
+  return cli(['search', 'zhihu', '--query', query, '--count', String(count)]);
+}
+
+/** 知乎额度查询（HTTP 优先，CLI 回退）。返回 { Code, Data:[...] } */
+export async function zhihuBackendQuota() {
+  if (zhihuHttpAvailable()) {
+    try {
+      return await httpQueryQuota({ secret: httpSecret() });
+    } catch (e) {
+      throw new Error(zhihuErrorToMessage(e));
+    }
+  }
+  return cli(['quota', '--api-id', 'zhihu_search', '--api-id', 'zhida_openai']);
+}
+
 let nextRequestAt = 0;
 let queue = Promise.resolve();
 const clean = (value) =>
@@ -97,7 +184,14 @@ export async function cli(args) {
   queue = turn.catch(() => {});
   await turn;
   try {
+    // 仅当开发态设置了临时知乎 secret 时，才把它注入子进程 env；
+    // 否则让 CLI 走它自己的 keychain/既有环境变量（保持向后兼容）。
+    const execEnv =
+      tempOverrides.zhihuSecret != null
+        ? { ...process.env, ZHIHU_ACCESS_SECRET: tempOverrides.zhihuSecret }
+        : process.env;
     const { stdout } = await exec(binary, args, {
+      env: execEnv,
       timeout: 155000,
       maxBuffer: 4 * 1024 * 1024,
     });
@@ -119,11 +213,12 @@ export async function cli(args) {
       reason = detail.Code ?? detail.error?.code ?? 'unknown';
     } catch {}
     // CLI 二进制缺失是最常见的启动期错误，给出可执行的指引而不是裸 ENOENT。
-    if (error.code === 'ENOENT') {
+    if (error.code === 'ENOENT' || !existsSync(binary)) {
       const hint =
         process.platform === 'win32'
-          ? '未找到 zhihu-cli，请在服务端设置 ZHIHU_CLI_PATH 指向 zhihu-cli.exe。'
-          : '未找到 zhihu-cli，请在服务端设置 ZHIHU_CLI_PATH 指向可执行文件。';
+          ? `未找到 zhihu-cli，期望路径：${binary}\n请设置环境变量 ZHIHU_CLI_PATH 指向 zhihu-cli.exe，例如：
+  $env:ZHIHU_CLI_PATH = 'C:\\Users\\你的用户名\\AppData\\Local\\ZhihuCLI\\current\\zhihu-cli.exe'`
+          : `未找到 zhihu-cli，期望路径：${binary}\n请设置环境变量 ZHIHU_CLI_PATH 指向 zhihu-cli 二进制。`;
       throw new Error(hint);
     }
     console.error('Zhihu request failed', {
@@ -156,7 +251,29 @@ export function parseModel(text) {
 }
 
 async function ask(prompt) {
-  if (analysisProvider() === 'deepseek') return deepseekJSON(prompt);
+  if (analysisProvider() === 'deepseek') {
+    return deepseekJSON(prompt, {
+      // 开发态若临时替换过 AI key，则优先使用它；否则回退到 env 中的 DEEPSEEK_API_KEY。
+      key: tempOverrides.aiKey || undefined,
+    });
+  }
+  if (zhihuHttpAvailable()) {
+    // 知乎直答走 HTTP（云端没有本地 CLI）。
+    let result;
+    try {
+      result = await httpChatCompletions({
+        model: 'zhida-fast-1p5',
+        messages: [{ role: 'user', content: prompt }],
+        secret: httpSecret(),
+      });
+    } catch (e) {
+      throw new Error(zhihuErrorToMessage(e));
+    }
+    return {
+      value: parseModel(result.choices?.[0]?.message?.content),
+      metadata: { provider: 'zhihu', model: 'zhida-fast-1p5' },
+    };
+  }
   const result = await cli([
     'answer',
     '--query',
@@ -377,39 +494,50 @@ export async function search(
     const cached = Boolean(data && Date.now() - data.at <= 3600000);
     if (!data || Date.now() - data.at > 3600000) {
       const started = Date.now();
+      let remoteAttempted = false;
       try {
-        data = {
-          at: Date.now(),
-          data: await cli([
-            'search',
-            'zhihu',
-            '--query',
-            query,
-            '--count',
-            String(SEARCH_RESULT_LIMIT),
-          ]),
-        };
+        data = await getCachedSearch(query);
+        if (data) {
+          data = { at: Date.now(), data: data.data };
+        } else {
+          remoteAttempted = true;
+          data = {
+            at: Date.now(),
+            data: await zhihuBackendSearch(query, SEARCH_RESULT_LIMIT),
+          };
+          try {
+            await putCachedSearch(query, data);
+          } catch {
+            // A cache write failure must not discard a valid search response.
+          }
+        }
         onMetric({
           stage: 'zhihu_search',
-          queryLayer:
-            ['hard_path', 'adaptive_gap', 'outcome', 'constraints', 'retrospective'][
-              index
-            ],
+          queryLayer: [
+            'hard_path',
+            'adaptive_gap',
+            'outcome',
+            'constraints',
+            'retrospective',
+          ][index],
           status: 'ok',
           elapsedMs: Date.now() - started,
-          searchCalls: 1,
-          cacheHits: 0,
+          searchCalls: remoteAttempted ? 1 : 0,
+          cacheHits: remoteAttempted ? 0 : 1,
         });
       } catch (error) {
         onMetric({
           stage: 'zhihu_search',
-          queryLayer:
-            ['hard_path', 'adaptive_gap', 'outcome', 'constraints', 'retrospective'][
-              index
-            ],
+          queryLayer: [
+            'hard_path',
+            'adaptive_gap',
+            'outcome',
+            'constraints',
+            'retrospective',
+          ][index],
           status: 'failed',
           elapsedMs: Date.now() - started,
-          searchCalls: 1,
+          searchCalls: remoteAttempted ? 1 : 0,
           cacheHits: 0,
         });
         throw error;
@@ -420,10 +548,13 @@ export async function search(
     if (cached)
       onMetric({
         stage: 'zhihu_search',
-        queryLayer:
-          ['hard_path', 'adaptive_gap', 'outcome', 'constraints', 'retrospective'][
-            index
-          ],
+        queryLayer: [
+          'hard_path',
+          'adaptive_gap',
+          'outcome',
+          'constraints',
+          'retrospective',
+        ][index],
         status: 'ok',
         elapsedMs: 0,
         searchCalls: 0,

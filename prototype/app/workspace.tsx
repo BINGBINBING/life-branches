@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
   ArrowLeft,
   ArrowRight,
@@ -49,6 +50,36 @@ const emptyProfile: Profile = {
   answers: {},
   skipped: [],
 };
+// “自由补充”在 profile.answers 中的内部固定键，不会当作补问展示。
+const FREE_NOTE_KEY = '__自由补充__';
+// 浏览器本地历史探索（结果快照）存储键与上限。
+const HISTORY_KEY = 'lb-browser-history-v1';
+const HISTORY_MAX = 20;
+
+function readHistoryLocal(): Job[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Job[];
+    return Array.isArray(parsed) ? parsed.filter((j) => j && j.profile) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeHistoryLocal(list: Job[]) {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+  } catch {
+    // 容量超限：去掉最旧一条再试一次，仍失败则放弃。
+    try {
+      localStorage.setItem(
+        HISTORY_KEY,
+        JSON.stringify(list.slice(0, HISTORY_MAX - 1)),
+      );
+    } catch {}
+  }
+}
 const exampleChoices = [
   '非科班，在职，想转行做开发',
   '工作三年，想从运营转行做产品经理',
@@ -282,16 +313,199 @@ function Followup({
   );
 }
 
+function FeedbackCard({
+  jobId,
+  question,
+}: {
+  jobId: string | null;
+  question: string;
+}) {
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [phase, setPhase] = useState<'idle' | 'saving' | 'sent'>('idle');
+  const [error, setError] = useState('');
+
+  async function submit() {
+    if (rating < 1 || phase === 'saving') return;
+    setPhase('saving');
+    setError('');
+    try {
+      await request<{ ok: boolean }>('/api/branches/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rating,
+          comment,
+          question,
+          jobId,
+        }),
+      });
+      setPhase('sent');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '反馈提交失败。');
+      setPhase('idle');
+    }
+  }
+
+  if (phase === 'sent')
+    return (
+      <div className="feedback-card">
+        <p className="feedback-thanks">
+          感谢反馈 🌱 我们会用你的意见改进体验。
+        </p>
+        <button
+          type="button"
+          className="text-button"
+          onClick={() => setPhase('idle')}
+        >
+          再评一次
+        </button>
+      </div>
+    );
+
+  return (
+    <div className="feedback-card">
+      <div className="feedback-head">
+        <strong>这次体验如何？</strong>
+        <span>1–5 星 + 可选评论</span>
+      </div>
+      <div className="star-row" aria-label="评分">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            aria-label={`${n} 星`}
+            aria-pressed={rating === n}
+            className={rating >= n ? 'on' : ''}
+            onClick={() => setRating(n)}
+          >
+            ★
+          </button>
+        ))}
+      </div>
+      {rating > 0 && (
+        <>
+          <textarea
+            rows={2}
+            maxLength={2000}
+            value={comment}
+            placeholder="想说点什么？（可选）"
+            onChange={(e) => setComment(e.target.value)}
+          />
+          <div className="feedback-actions">
+            <button
+              type="button"
+              className="primary"
+              disabled={phase === 'saving'}
+              onClick={() => void submit()}
+            >
+              {phase === 'saving' ? '提交中…' : '提交反馈'}
+            </button>
+          </div>
+        </>
+      )}
+      {error && (
+        <p className="inline-error" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function HistoryDialog({
+  history,
+  onOpen,
+  onDelete,
+  onClose,
+}: {
+  history: Job[];
+  onOpen: (entry: Job) => void;
+  onDelete: (id: string) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    ref.current?.showModal();
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      className="history-dialog"
+      onCancel={onClose}
+      onClose={onClose}
+    >
+      <div className="history-head">
+        <strong>我的历史探索</strong>
+        <span className="meta">保存在此浏览器中</span>
+        <button
+          type="button"
+          className="icon-button"
+          title="关闭"
+          aria-label="关闭"
+          onClick={() => ref.current?.close()}
+        >
+          <X size={18} />
+        </button>
+      </div>
+      {history.length ? (
+        <ul className="history-list">
+          {history.map((h) => (
+            <li key={h.id}>
+              <button
+                type="button"
+                className="history-entry"
+                onClick={() => onOpen(h)}
+              >
+                <span className="history-question">{h.profile.question}</span>
+                <span className="history-meta">
+                  {new Date(h.createdAt).toLocaleString('zh-CN', {
+                    month: 'numeric',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false,
+                  })}
+                  {' · '}
+                  {h.result?.paths?.length || 0} 条路径
+                  {' · '}
+                  {h.sources?.length || 0} 篇来源
+                  {h.reused ? ' · 复用来源' : ''}
+                </span>
+              </button>
+              <button
+                type="button"
+                className="history-delete"
+                title="删除"
+                aria-label="删除该条历史"
+                onClick={() => onDelete(h.id)}
+              >
+                <X size={14} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted" style={{ padding: '18px 4px' }}>
+          还没有保存的探索。完成一次实时搜索后会自动出现在这里。
+        </p>
+      )}
+    </dialog>
+  );
+}
+
 function ProfileDialog({
   profile,
   intake,
   onClose,
   onSave,
+  showFreeNote = false,
 }: {
   profile: Profile;
   intake: IntakePlan | null;
   onClose: () => void;
   onSave: (profile: Profile) => void;
+  showFreeNote?: boolean;
 }) {
   const [draft, setDraft] = useState(profile);
   const ref = useRef<HTMLDialogElement>(null);
@@ -303,7 +517,14 @@ function ProfileDialog({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          onSave(draft);
+          // 丢弃空答案（含被清空的自由补充），避免把空文本交给分析与补问。
+          const cleaned = {
+            ...draft,
+            answers: Object.fromEntries(
+              Object.entries(draft.answers).filter(([, v]) => v.trim() !== ''),
+            ),
+          };
+          onSave(cleaned);
         }}
       >
         <div className="dialog-heading">
@@ -324,21 +545,43 @@ function ProfileDialog({
         ) : (
           <ProfileFields profile={draft} onChange={setDraft} />
         )}
-        {Object.entries(draft.answers).map(([q, a]) => (
-          <label className="field-label" key={q}>
-            {q}
-            <input
-              value={a}
+        {showFreeNote && (
+          <label className="field-label">
+            自由补充（可选）
+            <textarea
+              rows={3}
               maxLength={400}
+              placeholder="没有待确认的问题时，也可以在这里补充任何想说明的情况…"
+              value={draft.answers[FREE_NOTE_KEY] ?? ''}
               onChange={(e) =>
                 setDraft({
                   ...draft,
-                  answers: { ...draft.answers, [q]: e.target.value },
+                  answers: {
+                    ...draft.answers,
+                    [FREE_NOTE_KEY]: e.target.value,
+                  },
                 })
               }
             />
           </label>
-        ))}
+        )}
+        {Object.entries(draft.answers)
+          .filter(([q]) => q !== FREE_NOTE_KEY)
+          .map(([q, a]) => (
+            <label className="field-label" key={q}>
+              {q}
+              <input
+                value={a}
+                maxLength={400}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    answers: { ...draft.answers, [q]: e.target.value },
+                  })
+                }
+              />
+            </label>
+          ))}
         <div className="dialog-actions">
           <button type="button" onClick={onClose}>
             取消
@@ -415,7 +658,13 @@ function IntakeFields({
     });
   const multiOptions: Record<string, string[]> = {
     employment_type: ['全职', '兼职', '实习', '外包 / 自由职业'],
-    application_materials: ['成绩单', '个人陈述', '推荐信', '作品集', '获奖证明'],
+    application_materials: [
+      '成绩单',
+      '个人陈述',
+      '推荐信',
+      '作品集',
+      '获奖证明',
+    ],
   };
   const amountUnit = (id: string) =>
     id === 'salary_floor_amount' || id === 'monthly_essential_cost'
@@ -558,6 +807,18 @@ export default function Workspace() {
   const [profile, setProfile] = useState<Profile>(emptyProfile);
   const [step, setStep] = useState<'start' | 'conditions' | 'explore'>('start');
   const [intake, setIntake] = useState<IntakePlan | null>(null);
+  // 首屏六字段（仿 demo）：年龄 / 学历 / 城市 / 当前 / 材料 / 想走方向
+  const [firstForm, setFirstFormState] = useState({
+    age: '',
+    edu: '', // 空则给下拉默认
+    city: '',
+    current: '',
+    materials: '',
+    target: '',
+  });
+  const setFirstForm = (patch: Partial<typeof firstForm>) =>
+    setFirstFormState((s) => ({ ...s, ...patch }));
+  const firstFormValid = () => firstForm.target.trim().length >= 2; // 最低：有一个想走的方向
   const [job, setJob] = useState<Job | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -571,6 +832,14 @@ export default function Workspace() {
     quota: { APIID: string; RemainingQuota: number }[] | null;
     archive: boolean;
   } | null>(null);
+  const [showKeys, setShowKeys] = useState(false);
+  const [zhihuKeyDraft, setZhihuKeyDraft] = useState('');
+  const [aiKeyDraft, setAiKeyDraft] = useState('');
+  const [overrideStatus, setOverrideStatus] = useState<{
+    zhihu: string | null;
+    ai: string | null;
+  } | null>(null);
+  const [keysSaving, setKeysSaving] = useState(false);
   const controller = useRef<AbortController | null>(null);
   const activeRequest = useRef(false);
   const snapshot = useRef({ profile, job });
@@ -679,53 +948,138 @@ export default function Workspace() {
     }
   }
 
-  useEffect(() => () => controller.current?.abort(), []);
+  const [history, setHistory] = useState<Job[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
 
-  const prepareIntake = useCallback(async (question: string) => {
-    if (activeRequest.current) return;
-    activeRequest.current = true;
-    controller.current?.abort();
-    const ac = new AbortController();
-    controller.current = ac;
-    setBusy(true);
+  // 浏览器本地读取最近探索快照（SSR 安全：仅在挂载后读取）。
+  useEffect(() => {
+    let ignore = false;
+    void Promise.resolve().then(() => {
+      if (ignore) return;
+      setHistory(readHistoryLocal());
+    });
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  const rememberJob = useCallback((job: Job) => {
+    setHistory((prev) => {
+      const rest = prev.filter((h) => h.id !== job.id);
+      const next = [{ ...job }, ...rest].slice(0, HISTORY_MAX);
+      writeHistoryLocal(next);
+      return next;
+    });
+  }, []);
+
+  const removeHistory = useCallback((id: string) => {
+    setHistory((prev) => {
+      const next = prev.filter((h) => h.id !== id);
+      writeHistoryLocal(next);
+      return next;
+    });
+  }, []);
+
+  function openHistoryEntry(entry: Job) {
+    setError('');
+    setJob(entry);
+    setProfile(entry.profile);
+    setPathId(entry.result?.paths[0]?.id || '');
+    setFilter('all');
+    setFocus('');
+    setEditing(false);
+    setShowHistory(false);
+    setStep('explore');
+  }
+
+  async function refreshOverrides() {
+    try {
+      const s = await request<{
+        provider: string;
+        devOverride: { zhihu: string | null; ai: string | null };
+      }>('/api/branches/settings');
+      setOverrideStatus(s.devOverride);
+    } catch {
+      setOverrideStatus(null);
+    }
+  }
+
+  async function saveTempKey(kind: 'zhihu' | 'ai', value: string) {
+    setKeysSaving(true);
     setError('');
     try {
-      const plan = await request<IntakePlan>('/api/branches/intake', {
+      const s = await request<{
+        ok: boolean;
+        devOverride: { zhihu: string | null; ai: string | null };
+      }>('/api/branches/keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question }),
-        signal: ac.signal,
+        body: JSON.stringify({ type: kind, value }),
       });
-      if (!plan.supported) {
-        setError(plan.message);
-        return;
-      }
-      setIntake(plan);
-      setProfile({
-        ...emptyProfile,
-        question: question.trim(),
-        decisionScope: plan.scope,
-        decisionPath: plan.path,
-        decisionSector: plan.sector,
-        conditionAnswers: Object.fromEntries(
-          plan.fields
-            .filter((field) => field.initialValue)
-            .map((field) => [field.id, field.initialValue!]),
-        ),
-      });
-      setStep('conditions');
+      if (kind === 'zhihu') setZhihuKeyDraft('');
+      else setAiKeyDraft('');
+      setOverrideStatus(s.devOverride);
     } catch (e) {
-      if (!ac.signal.aborted)
-        setError(
-          e instanceof Error
-            ? e.message
-            : '条件表单暂时未能生成，尚未开始知乎搜索。',
-        );
+      setError(e instanceof Error ? e.message : '保存密钥失败。');
     } finally {
-      if (!ac.signal.aborted) setBusy(false);
-      activeRequest.current = false;
+      setKeysSaving(false);
     }
-  }, []);
+  }
+
+  useEffect(() => () => controller.current?.abort(), []);
+
+  const prepareIntake = useCallback(
+    async (question: string, seed: Partial<Profile> = {}) => {
+      if (activeRequest.current) return;
+      activeRequest.current = true;
+      controller.current?.abort();
+      const ac = new AbortController();
+      controller.current = ac;
+      setBusy(true);
+      setError('');
+      try {
+        const plan = await request<IntakePlan>('/api/branches/intake', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question }),
+          signal: ac.signal,
+        });
+        if (!plan.supported) {
+          setError(plan.message);
+          return;
+        }
+        setIntake(plan);
+        setProfile({
+          ...emptyProfile,
+          ...seed,
+          question: question.trim(),
+          decisionScope: plan.scope,
+          decisionPath: plan.path,
+          decisionSector: plan.sector,
+          conditionAnswers: {
+          ...seed.conditionAnswers,
+            ...Object.fromEntries(
+              plan.fields
+                .filter((field) => field.initialValue)
+                .map((field) => [field.id, field.initialValue!]),
+            ),
+          },
+        });
+        setStep('conditions');
+      } catch (e) {
+        if (!ac.signal.aborted)
+          setError(
+            e instanceof Error
+              ? e.message
+              : '条件表单暂时未能生成，尚未开始知乎搜索。',
+          );
+      } finally {
+        if (!ac.signal.aborted) setBusy(false);
+        activeRequest.current = false;
+      }
+    },
+    [],
+  );
 
   const explore = useCallback(
     async (nextProfile: Profile, previousId?: string) => {
@@ -763,6 +1117,9 @@ export default function Workspace() {
           if (current.status !== 'running') {
             if (current.error) setError(current.error);
             setPathId(current.result?.paths[0]?.id || '');
+            // 探索成功即保存快照到浏览器本地，便于之后回看。
+            if (current.status === 'done' && current.result)
+              rememberJob(current);
             return current;
           }
           if (Date.now() > deadline)
@@ -782,7 +1139,7 @@ export default function Workspace() {
         activeRequest.current = false;
       }
     },
-    [],
+    [rememberJob],
   );
 
   const path =
@@ -801,7 +1158,8 @@ export default function Workspace() {
     cases.some((c) => c.id === i.sourceId),
   );
   const comparableRecords = records.filter(
-    (record) => record.question === profile.question && record.id !== savedRecordId,
+    (record) =>
+      record.question === profile.question && record.id !== savedRecordId,
   );
   const currentConditions = new Map([
     ['background', profile.background],
@@ -895,19 +1253,74 @@ export default function Workspace() {
     return () => lifecycle.abort();
   }, [profile, job, step, busy, paths]);
 
+  function returnHome() {
+    controller.current?.abort();
+    setStep('start');
+    setProfile(emptyProfile);
+    setFirstFormState({
+      age: '',
+      edu: '',
+      city: '',
+      current: '',
+      materials: '',
+      target: '',
+    });
+    setJob(null);
+    setBusy(false);
+    setError('');
+    setEditing(false);
+    setShowKeys(false);
+    setShowHistory(false);
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
         <div className="brand">
           <GitBranch size={26} />
-          <strong>人生分枝</strong>
-          <span>经验探索</span>
+          <strong>
+            <Link
+              href="/"
+              onClick={(event) => {
+                event.preventDefault();
+                returnHome();
+              }}
+            >
+              人生分枝
+            </Link>
+          </strong>
+          <span>基于知乎优质解答的经验探索工具</span>
         </div>
         <div className="header-right">
           <span className="source-label">
             <span className="live-dot" />
             知乎公开内容
           </span>
+          <button
+            aria-haspopup="dialog"
+            aria-expanded={showKeys}
+            onClick={() => {
+              setShowKeys((v) => !v);
+              if (!showKeys) void refreshOverrides();
+            }}
+            title="开发期临时切换密钥"
+            className="key-toggle"
+          >
+            <SlidersHorizontal size={15} />
+            开发者密钥
+          </button>
+          {history.length > 0 && (
+            <button
+              aria-haspopup="dialog"
+              aria-expanded={showHistory}
+              onClick={() => setShowHistory(true)}
+              title="查看浏览器中保存的探索结果"
+              className="key-toggle"
+            >
+              <Clock3 size={15} />
+              我的结果（{history.length}）
+            </button>
+          )}
           {step === 'explore' && (
             <button
               disabled={busy}
@@ -925,6 +1338,76 @@ export default function Workspace() {
             </button>
           )}
         </div>
+        {showKeys && (
+          <section className="key-panel" aria-label="开发期临时密钥">
+            <div className="key-panel-title">
+              <strong>开发期临时密钥</strong>
+              <span>仅保存在本服务进程内存，刷新 / 重启即清除</span>
+            </div>
+            <label className="key-field">
+              <span>
+                知乎 Access Secret{' '}
+                {overrideStatus?.zhihu ? (
+                  <em>（已注入 {overrideStatus.zhihu}）</em>
+                ) : (
+                  <em>（未注入 → 用本机默认）</em>
+                )}
+              </span>
+              <input
+                type="password"
+                autoComplete="off"
+                value={zhihuKeyDraft}
+                placeholder="留空并点清除则恢复本机 keychain"
+                onChange={(e) => setZhihuKeyDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void saveTempKey('zhihu', zhihuKeyDraft);
+                  }
+                }}
+              />
+              <div className="key-actions">
+                <button
+                  disabled={keysSaving}
+                  onClick={() => void saveTempKey('zhihu', zhihuKeyDraft)}
+                >
+                  {zhihuKeyDraft ? '注入该密钥' : '清除（用本机默认）'}
+                </button>
+              </div>
+            </label>
+            <label className="key-field">
+              <span>
+                搜索 / 分析 AI Key（DeepSeek 等）
+                {overrideStatus?.ai ? (
+                  <em>（已注入 {overrideStatus.ai}）</em>
+                ) : (
+                  <em>（未注入 → 用 .env.local / 环境变量）</em>
+                )}
+              </span>
+              <input
+                type="password"
+                autoComplete="off"
+                value={aiKeyDraft}
+                placeholder="留空并点清除则回退服务端配置"
+                onChange={(e) => setAiKeyDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void saveTempKey('ai', aiKeyDraft);
+                  }
+                }}
+              />
+              <div className="key-actions">
+                <button
+                  disabled={keysSaving}
+                  onClick={() => void saveTempKey('ai', aiKeyDraft)}
+                >
+                  {aiKeyDraft ? '注入该密钥' : '清除（用服务端配置）'}
+                </button>
+              </div>
+            </label>
+          </section>
+        )}
       </header>
       {step !== 'explore' ? (
         <main className="start-page">
@@ -950,35 +1433,106 @@ export default function Workspace() {
             {step === 'start' ? '一个选择，不同走法' : '把经验放回你的处境'}
           </div>
           <h1>
-            {step === 'start' ? '你正在考虑什么选择？' : '先了解一点你的情况'}
+            {step === 'start' ? '你想探索什么方向？' : '先了解一点你的情况'}
           </h1>
           {step === 'start' ? (
             <>
               <form
-                className="question-form"
+                className="question-form start-form"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (profile.question.trim().length >= 2)
-                    void prepareIntake(profile.question);
+                  if (!firstFormValid()) return;
+                  const bg = [
+                    firstForm.age.trim() ? `${firstForm.age.trim()} 岁` : '',
+                    firstForm.edu || '',
+                    firstForm.city.trim() ? `在${firstForm.city.trim()}` : '',
+                    firstForm.current.trim()
+                      ? `目前是${firstForm.current.trim()}`
+                      : '',
+                    firstForm.materials.trim()
+                      ? `已有：${firstForm.materials.trim()}`
+                      : '',
+                  ]
+                    .filter(Boolean)
+                    .join('，');
+                  const description = [firstForm.target.trim(), bg]
+                    .filter(Boolean)
+                    .join('，');
+                  void prepareIntake(description, {
+                    background: bg || profile.background,
+                  });
                 }}
               >
-                <label htmlFor="choice">当前选择</label>
-                <textarea
-                  id="choice"
-                  required
-                  minLength={2}
-                  maxLength={240}
-                  value={profile.question}
-                  onChange={(e) =>
-                    setProfile({ ...profile, question: e.target.value })
-                  }
-                  placeholder="例如：非科班，在职，想转行做开发"
-                />
+                <div className="field-grid">
+                  <label className="field-label span2">
+                    想探索的方向 / 目标
+                    <input
+                      required
+                      value={firstForm.target}
+                      placeholder="例如：转专业到计算机科学 / 转行做餐饮"
+                      onChange={(e) => setFirstForm({ target: e.target.value })}
+                    />
+                  </label>
+
+                  <p className="form-hint">
+                    请再补充一些你的情况，帮助我们更贴近你的处境。
+                  </p>
+
+                  <label className="field-label">
+                    年龄
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={firstForm.age}
+                      placeholder="例如 18"
+                      onChange={(e) => setFirstForm({ age: e.target.value })}
+                    />
+                  </label>
+                  <label className="field-label">
+                    学历
+                    <input
+                      type="text"
+                      value={firstForm.edu}
+                      placeholder="例如：本科在读 / 硕士 / 高中毕业"
+                      onChange={(e) => setFirstForm({ edu: e.target.value })}
+                    />
+                  </label>
+                  <label className="field-label">
+                    所在城市
+                    <input
+                      value={firstForm.city}
+                      placeholder="例如 北京"
+                      onChange={(e) => setFirstForm({ city: e.target.value })}
+                    />
+                  </label>
+                  <label className="field-label">
+                    当前专业 / 行业
+                    <input
+                      value={firstForm.current}
+                      placeholder="例如：土木工程 / 电商运营"
+                      onChange={(e) =>
+                        setFirstForm({ current: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label className="field-label span2">
+                    已掌握的资料 / 背景（可选）
+                    <input
+                      value={firstForm.materials}
+                      placeholder="例如：无 / 会 C 语言 / 有竞赛经历…"
+                      onChange={(e) =>
+                        setFirstForm({ materials: e.target.value })
+                      }
+                    />
+                  </label>
+                </div>
                 <div className="form-footer">
-                  <span className="muted">一次探索一个选择</span>
+                  <span className="muted">
+                    第二步会需要补充投入时间与限制（选填）
+                  </span>
                   <button
                     className="primary"
-                    disabled={busy || profile.question.trim().length < 2}
+                    disabled={busy || !firstFormValid()}
                   >
                     {busy ? (
                       <>
@@ -987,7 +1541,7 @@ export default function Workspace() {
                       </>
                     ) : (
                       <>
-                        继续 <ArrowRight size={18} />
+                        继续探索 <ArrowRight size={18} />
                       </>
                     )}
                   </button>
@@ -1029,8 +1583,8 @@ export default function Workspace() {
                           <strong>{record.question}</strong>
                           <small>
                             {new Date(record.savedAt).toLocaleString('zh-CN')} ·{' '}
-                            {record.conditionCount} 项条件 · {record.pathCount} 条路径 ·{' '}
-                            {record.caseCount} 段经历
+                            {record.conditionCount} 项条件 · {record.pathCount}{' '}
+                            条路径 · {record.caseCount} 段经历
                           </small>
                         </span>
                         <ArrowRight size={16} />
@@ -1055,8 +1609,9 @@ export default function Workspace() {
                     <button
                       key={choice}
                       onClick={() => {
-                        setProfile({ ...emptyProfile, question: choice });
-                        void prepareIntake(choice);
+                        // 示例作为可编辑起点：直接回填到首屏的目标/当前，不绕开表单。
+                        setFirstForm({ target: choice });
+                        setProfile({ ...profile, question: choice });
                       }}
                       disabled={busy}
                     >
@@ -1100,6 +1655,9 @@ export default function Workspace() {
                     type="button"
                     className="text-button"
                     onClick={() => {
+                      // 返回首屏时保留目标，避免表单被清空
+                      if (profile.question.trim() && !firstForm.target.trim())
+                        setFirstForm({ target: profile.question });
                       setStep('start');
                       setIntake(null);
                     }}
@@ -1197,7 +1755,9 @@ export default function Workspace() {
                   ...previous.keys(),
                 ]);
                 const changed = [...ids].filter(
-                  (id) => (currentConditions.get(id) || '') !== (previous.get(id) || ''),
+                  (id) =>
+                    (currentConditions.get(id) || '') !==
+                    (previous.get(id) || ''),
                 );
                 return (
                   <article key={record.id}>
@@ -1206,8 +1766,8 @@ export default function Workspace() {
                         {new Date(record.savedAt).toLocaleString('zh-CN')}
                       </strong>
                       <span className="meta">
-                        {changed.length} 项条件不同 · {record.pathCount} 条路径 ·{' '}
-                        {record.caseCount} 段经历
+                        {changed.length} 项条件不同 · {record.pathCount} 条路径
+                        · {record.caseCount} 段经历
                       </span>
                     </div>
                     <button onClick={() => void openResearch(record.id)}>
@@ -1329,8 +1889,8 @@ export default function Workspace() {
                           <h3>目标岗位要求校准</h3>
                           <span className="meta">
                             当前样本{' '}
-                            {job.result.jobRequirementAssessment.sampleCount} 条
-                            {' '}· 岗位：
+                            {job.result.jobRequirementAssessment.sampleCount} 条{' '}
+                            · 岗位：
                             {job.result.jobRequirementAssessment.role ||
                               '未提供'}
                             · 地区：
@@ -1347,7 +1907,9 @@ export default function Workspace() {
                               <div key={item.id}>
                                 <dt>
                                   {item.label}
-                                  <span className={`requirement-status ${item.status}`}>
+                                  <span
+                                    className={`requirement-status ${item.status}`}
+                                  >
                                     {item.status === 'met'
                                       ? '已满足'
                                       : item.status === 'gap'
@@ -1543,7 +2105,7 @@ export default function Workspace() {
                         <CheckCircle2 size={22} />
                         <p>目前没有新的关键补问。</p>
                         <span className="meta">
-                          这不代表信息已完整。每段经历中仍可能有来源未说明的条件。
+                          这不代表信息已完整。想补充任何情况，可点下方「修改已填写条件」自由填写。
                         </span>
                       </div>
                     )}
@@ -1554,6 +2116,10 @@ export default function Workspace() {
                       <SlidersHorizontal size={16} />
                       修改已填写条件
                     </button>
+                    <FeedbackCard
+                      jobId={job?.id ?? null}
+                      question={profile.question}
+                    />
                   </aside>
                 </div>
               ) : (
@@ -1729,6 +2295,15 @@ export default function Workspace() {
                 {Boolean(job?.result?.rejected) && (
                   <span>已移除 {job?.result?.rejected} 项无有效引用的分析</span>
                 )}
+                <button
+                  type="button"
+                  className="admin-entry"
+                  onClick={() => {
+                    window.location.href = '/admin';
+                  }}
+                >
+                  数据后台
+                </button>
               </footer>
             </>
           )}
@@ -1742,6 +2317,15 @@ export default function Workspace() {
           onSave={(p) =>
             void explore(p, job?.sources.length ? job.id : undefined)
           }
+          showFreeNote={questions.length === 0}
+        />
+      )}
+      {showHistory && (
+        <HistoryDialog
+          history={history}
+          onOpen={openHistoryEntry}
+          onDelete={removeHistory}
+          onClose={() => setShowHistory(false)}
         />
       )}
     </div>
