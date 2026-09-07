@@ -1,15 +1,15 @@
 // 方案乙：单端口生产服务（Node，无 Cloudflare/无 vite dev）
 //
 // 在纯 Node 服务器上同时提供：
-//   - 页面：dist/（vinext 生产产物里的 worker 形态 handler + ASSETS 静态）
+//   - 页面：dist/（vinext 生产产物里的 worker 形态 handler + 静态资源）
 //   - API：server/api.mjs 的 localApi() 中间件（与本地开发同一份代码）
 //
-// 用途：让“本地这套后端 + 前端产物”能在任意有 Node 24 的 VPS 上原样运行，
+// 用途：让“本地这套后端 + 前端产物”能在任意有 Node 的服务器上原样运行，
 // 不需要 Cloudflare Worker 环境，也无需改 engine/storage/http 任何逻辑。
 //
 // 运行（cwd = prototype）：先 `npm run build`，再：
-//   node standalone-server.mjs            （默认 127.0.0.1:4320）
-//   PORT=4321 node standalone-server.mjs  （自定义端口）
+//   node standalone-server.mjs            （默认监听 0.0.0.0:4320）
+//   PORT=8080 node standalone-server.mjs  （自定义端口）
 import http from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -19,6 +19,7 @@ import { localApi } from './server/api.mjs';
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const CLIENT_DIR = path.join(ROOT, 'dist', 'client');
 const PORT = Number(process.env.PORT || 4320);
+const HOST = process.env.HOST || '0.0.0.0';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -191,11 +192,11 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, '127.0.0.1', async () => {
+server.listen(PORT, HOST, async () => {
   try {
     await loadPageHandler();
   } catch (e) {
     console.error('加载 dist 页面产物失败（先执行 npm run build）:', e?.message || e);
   }
-  console.log(`人生分枝 standalone 服务已启动: http://127.0.0.1:${PORT}`);
+  console.log(`人生分枝 standalone 服务已启动: http://${HOST}:${PORT}`);
 });
