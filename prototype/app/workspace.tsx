@@ -1147,7 +1147,7 @@ export default function Workspace() {
                     className="primary"
                     disabled={!firstFormValid()}
                   >
-                    继续补充条件（选填） <ArrowRight size={18} />
+                    继续探索 <ArrowRight size={18} />
                   </button>
                 </div>
               </form>
