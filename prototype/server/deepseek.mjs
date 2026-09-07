@@ -8,17 +8,13 @@ try {
 }
 
 export function analysisProvider() {
-  const provider = process.env.ANALYSIS_PROVIDER || 'zhihu';
-  if (!['zhihu', 'deepseek'].includes(provider))
-    throw new Error('不支持的分析服务配置。');
-  return provider;
+  // 分析统一由 DeepSeek 提供（知乎直答已弃用；如需临时回退请手动改这里，不提供运行时开关）。
+  return 'deepseek';
 }
 
 export function requiredQuotaIds(reused) {
-  return [
-    ...(reused ? [] : ['zhihu_search']),
-    ...(analysisProvider() === 'zhihu' ? ['zhida_openai'] : []),
-  ];
+  // 分析走 DeepSeek，不再消耗知乎直答额度；只需为首次探索预留知乎搜索额度。
+  return reused ? [] : ['zhihu_search'];
 }
 
 export async function deepseekJSON(prompt, options = {}) {

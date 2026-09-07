@@ -3,12 +3,11 @@ import { promisify } from 'node:util';
 import { homedir, platform } from 'node:os';
 import { win32, posix } from 'node:path';
 import { existsSync } from 'node:fs';
-import { analysisProvider, deepseekJSON } from './deepseek.mjs';
+import { deepseekJSON } from './deepseek.mjs';
 import { getCachedSearch, putCachedSearch } from './storage.mjs';
 import {
   searchZhihu as httpSearchZhihu,
   queryQuota as httpQueryQuota,
-  chatCompletions as httpChatCompletions,
 } from './zhihu-http.mjs';
 
 const exec = promisify(execFile);
@@ -106,10 +105,15 @@ function zhihuErrorToMessage(e) {
   return '知乎服务暂时无法完成请求，请检查连接或稍后重试。';
 }
 
-async function zhihuBackendSearch(query, count = 5) {
+async function zhihuBackendSearch(query, count = 10) {
   if (zhihuHttpAvailable()) {
     try {
-      return await httpSearchZhihu(query, count, { secret: httpSecret() });
+      const result = await httpSearchZhihu(query, count, {
+        secret: httpSecret(),
+      });
+      // HTTP 直连没有 CLI 内置的节流队列，这里做轻量间隔，降低触发频率限制概率。
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      return result;
     } catch (e) {
       throw new Error(zhihuErrorToMessage(e));
     }
@@ -219,42 +223,11 @@ export function parseModel(text) {
 }
 
 async function ask(prompt) {
-  if (analysisProvider() === 'deepseek') {
-    return deepseekJSON(prompt, {
-      // 开发态若临时替换过 AI key，则优先使用它；否则回退到 env 中的 DEEPSEEK_API_KEY。
-      key: tempOverrides.aiKey || undefined,
-    });
-  }
-  if (zhihuHttpAvailable()) {
-    // 知乎直答走 HTTP（云端没有本地 CLI）。
-    let result;
-    try {
-      result = await httpChatCompletions({
-        model: 'zhida-fast-1p5',
-        messages: [{ role: 'user', content: prompt }],
-        secret: httpSecret(),
-      });
-    } catch (e) {
-      throw new Error(zhihuErrorToMessage(e));
-    }
-    return {
-      value: parseModel(result.choices?.[0]?.message?.content),
-      metadata: { provider: 'zhihu', model: 'zhida-fast-1p5' },
-    };
-  }
-  const result = await cli([
-    'answer',
-    '--query',
-    prompt,
-    '--model',
-    'zhida-fast-1p5',
-    '--timeout',
-    '150s',
-  ]);
-  return {
-    value: parseModel(result.choices?.[0]?.message?.content),
-    metadata: { provider: 'zhihu', model: 'zhida-fast-1p5' },
-  };
+  // 分析统一由 DeepSeek 提供（不再使用知乎直答；若未配置 Key 会给出清晰报错）。
+  return deepseekJSON(prompt, {
+    // 后台切换的临时 AI Key 优先，否则回退到 env 中的 DEEPSEEK_API_KEY。
+    key: tempOverrides.aiKey || undefined,
+  });
 }
 
 export function profileText(profile) {
@@ -324,6 +297,7 @@ export function aggregate(results) {
           author: limited(item.AuthorName || '作者信息未返回', 80),
           badge: limited(item.AuthorBadgeText, 100),
           editTime: item.EditTime || null,
+          votes: Number(item.VoteUpCount) || 0,
           snippets: [],
           queries: [],
         });
@@ -331,24 +305,40 @@ export function aggregate(results) {
       if (!source.snippets.includes(excerpt)) source.snippets.push(excerpt);
       if (!source.queries.includes(query)) source.queries.push(query);
       if (item.AuthorName) source.author = limited(item.AuthorName, 80);
+      const votes = Number(item.VoteUpCount) || 0;
+      if (votes > source.votes) source.votes = votes;
     }
   }
-  return [...sources.values()].slice(0, 12);
+  // 按赞同数降序取前 20 个来源（提升高相关内容的优先进入分析）
+  return [...sources.values()].sort((a, b) => b.votes - a.votes).slice(0, 20);
 }
 
 export function searchQueries(profile) {
   const stem = [profile.question, profile.background?.slice(0, 60)]
     .filter(Boolean)
     .join(' ');
-  return [`${stem} 亲身经历 成功 过程`, `${stem} 失败 后悔 复盘`];
+  // 正/反各 3 组语义变体，提升召回；search() 会按去重收益提前停止。
+  const pairs = [
+    ['亲身经历 成功 过程', '失败 后悔 复盘'],
+    ['上岸 经验 干货', '劝退 避坑 值不值得'],
+    ['成功 转变 真实故事', '没成功 教训 反思'],
+  ];
+  return pairs.flatMap(([pos, neg]) => [`${stem} ${pos}`, `${stem} ${neg}`]);
 }
 
 export async function search(profile, progress, onSources = () => {}) {
   const queries = searchQueries(profile);
   const results = [];
   // Stop immediately on quota/auth errors; don't fan out requests on a failing account.
-  for (const query of queries) {
-    progress(`正在检索${results.length ? '受挫经历' : '行动与成果'}…`);
+  let prevSourceCount = 0;
+  let emptyStreak = 0;
+  let canEarlyStop = false; // 至少完成前两个方向（正/反各 1）后才允许提前停
+  for (const [index, query] of queries.entries()) {
+    progress(
+      results.length
+        ? `正在补充检索（${index + 1}/${queries.length}）…`
+        : '正在检索行动与成果…',
+    );
     let data = cache.get(query);
     if (!data || Date.now() - data.at > 3600000) {
       // 二级：持久缓存（磁盘，跨进程/重启，24h TTL；过期项在 storage 内视为未命中）
@@ -358,7 +348,7 @@ export async function search(profile, progress, onSources = () => {}) {
         // 三级：真实调用知乎（HTTP 优先 / CLI 回退），成功后写入内存与磁盘
         data = {
           at: Date.now(),
-          data: await zhihuBackendSearch(query, 5),
+          data: await zhihuBackendSearch(query, 10),
         };
         try {
           await putCachedSearch(query, data);
@@ -370,6 +360,15 @@ export async function search(profile, progress, onSources = () => {}) {
       cache.set(query, data);
     }
     results.push({ query, data: data.data });
+    const cur = aggregate(results).length;
+    const grew = cur > prevSourceCount;
+    prevSourceCount = cur;
+    emptyStreak = grew ? 0 : emptyStreak + 1;
+    if (index >= 1) canEarlyStop = true;
+    if (canEarlyStop && emptyStreak >= 2) {
+      progress('已获得足够来源，停止补充检索');
+      break;
+    }
     onSources(aggregate(results));
   }
   return aggregate(results);

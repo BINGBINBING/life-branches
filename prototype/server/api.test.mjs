@@ -89,6 +89,6 @@ test('search includes supplied background without interpreting it as strict filt
     question: '转行开发',
     background: '文科本科',
   });
-  assert.equal(queries.length, 2);
+  assert.equal(queries.length, 6);
   assert.ok(queries.every((q) => q.includes('文科本科')));
 });

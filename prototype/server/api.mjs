@@ -142,6 +142,9 @@ export function localApi() {
             return send(res, 200, job);
           }
           if (req.method === 'GET' && url.pathname === '/api/branches/settings') {
+            // 已迁移到后台：需要管理员密码才能读取（避免把注入状态暴露给普通用户）。
+            if (!authAdmin(req))
+              return send(res, 401, { error: '管理密码错误或未登录。' });
             return send(res, 200, {
               provider: analysisProvider(),
               devOverride: summaryCredentialStatus(), // 脱敏；不返回完整 key
@@ -151,6 +154,8 @@ export function localApi() {
             req.method === 'POST' &&
             url.pathname === '/api/branches/keys'
           ) {
+            if (!authAdmin(req))
+              return send(res, 401, { error: '管理密码错误或未登录。' });
             try {
               const input = await body(req);
               // 仅开发期：type 取 zhihu|ai；value 为空则清除该项。

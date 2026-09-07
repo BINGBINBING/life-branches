@@ -73,6 +73,125 @@ function Metric({ label, value }: { label: string; value: string | number }) {
   );
 }
 
+type OverrideState = { zhihu: string | null; ai: string | null };
+
+// 开发者密钥切换（仅后台可见、需管理员密码）：额度不足时在此更换知乎/DeepSeek 凭证。
+function AdminKeysCard() {
+  const [provider, setProvider] = useState('');
+  const [status, setStatus] = useState<OverrideState | null>(null);
+  const [zhihuDraft, setZhihuDraft] = useState('');
+  const [aiDraft, setAiDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const pw = () => sessionStorage.getItem(STORE_KEY) ?? '';
+
+  useEffect(() => {
+    let ignore = false;
+    const run = async () => {
+      setMsg('');
+      try {
+        const r = await fetch('/api/branches/settings', {
+          headers: { 'x-admin-password': pw() },
+        });
+        const d = (await r.json()) as {
+          provider?: string;
+          devOverride?: OverrideState;
+          error?: string;
+        };
+        if (!r.ok) throw new Error(d.error || '无法读取配置');
+        if (!ignore) {
+          setProvider(d.provider || '');
+          setStatus(d.devOverride || null);
+        }
+      } catch (e) {
+        if (!ignore) setMsg(e instanceof Error ? e.message : '读取失败');
+      }
+    };
+    void run();
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  const apply = async (kind: 'zhihu' | 'ai', value: string) => {
+    setBusy(true);
+    setMsg('');
+    try {
+      const r = await fetch('/api/branches/keys', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-password': pw(),
+        },
+        body: JSON.stringify({ type: kind, value }),
+      });
+      const d = (await r.json()) as { ok?: boolean; devOverride?: OverrideState; error?: string };
+      if (!r.ok || !d.ok) throw new Error(d.error || '设置失败');
+      if (kind === 'zhihu') setZhihuDraft('');
+      else setAiDraft('');
+      setStatus(d.devOverride || null);
+      setMsg('已更新（仅本次进程生效，重启恢复默认）');
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : '设置失败');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card
+      title={`开发者密钥 / 额度切换${provider ? ` · 分析：${provider}` : ''}`}
+      right={<span className="meta">进程内存，重启即清除</span>}
+    >
+      <p className="meta" style={{ marginBottom: 10 }}>
+        额度不足时可在此临时更换知乎 Access Secret 或 DeepSeek Key，用于轮换账号/继续测试；不影响本机默认配置。
+      </p>
+      <div className="key-field">
+        <span>
+          知乎 Access Secret{' '}
+          {status?.zhihu ? <em>（已注入 {status.zhihu}）</em> : <em>（未注入 → 用默认）</em>}
+        </span>
+        <input
+          type="password"
+          autoComplete="off"
+          value={zhihuDraft}
+          placeholder="粘贴新的知乎 Access Secret（留空点右侧=清除）"
+          onChange={(e) => setZhihuDraft(e.target.value)}
+        />
+        <div className="key-actions">
+          <button disabled={busy} onClick={() => void apply('zhihu', zhihuDraft)}>
+            {zhihuDraft ? '注入知乎密钥' : '清除知乎密钥'}
+          </button>
+        </div>
+      </div>
+      <div className="key-field">
+        <span>
+          分析 AI Key（DeepSeek）{' '}
+          {status?.ai ? <em>（已注入 {status.ai}）</em> : <em>（未注入 → 用服务端配置）</em>}
+        </span>
+        <input
+          type="password"
+          autoComplete="off"
+          value={aiDraft}
+          placeholder="粘贴新的 DeepSeek API Key（留空点右侧=清除）"
+          onChange={(e) => setAiDraft(e.target.value)}
+        />
+        <div className="key-actions">
+          <button disabled={busy} onClick={() => void apply('ai', aiDraft)}>
+            {aiDraft ? '注入 AI Key' : '清除 AI Key'}
+          </button>
+        </div>
+      </div>
+      {msg && (
+        <p className="inline-error" aria-live="polite">
+          {msg}
+        </p>
+      )}
+    </Card>
+  );
+}
+
 export default function AdminPage() {
   const [pw, setPw] = useState('');
   const [authed, setAuthed] = useState(false);
@@ -217,6 +336,8 @@ export default function AdminPage() {
           <X size={15} /> 退出
         </button>
       </div>
+
+      <AdminKeysCard />
 
       <Card title="概览" right={<span className="meta">今日 {data.today}</span>}>
         <div className="admin-metrics">
