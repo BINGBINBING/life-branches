@@ -13,22 +13,27 @@ import {
   CircleHelp,
   Clock3,
   GitBranch,
+  History,
   LoaderCircle,
   Pencil,
   Plus,
   Search,
+  Save,
   ShieldCheck,
   SlidersHorizontal,
   Sprout,
   TriangleAlert,
+  Trash2,
   X,
 } from 'lucide-react';
 import type {
   Experience,
   Fact,
+  IntakePlan,
   Job,
   Profile,
   Question,
+  ResearchSummary,
   Source,
 } from '../lib/branch-types';
 
@@ -37,22 +42,27 @@ const emptyProfile: Profile = {
   background: '',
   time: '',
   goal: '',
+  conditionAnswers: {},
+  decisionScope: '',
+  decisionPath: '',
+  decisionSector: '',
   answers: {},
   skipped: [],
 };
 const exampleChoices = [
   '非科班，在职，想转行做开发',
-  '工作三年后，想考全日制研究生',
-  '本科毕业后，想出国读硕士',
+  '工作三年，想从运营转行做产品经理',
+  '本科计算机，想跨专业考心理学研究生',
   '想从工科转到设计专业',
 ];
 const resultLabels = {
   success: '阶段目标达成',
   setback: '阶段受挫',
   mixed: '有得有失',
-  unknown: '结果未明',
+  unknown: '结果待核实',
 };
 const kindLabels = {
+  unknown: '内容性质待核实',
   self: '个人自述 · 未独立核实',
   retold: '转述经历',
   advice: '建议类内容',
@@ -120,6 +130,7 @@ function ExperienceCard({
           {resultLabels[item.result]}
         </span>
         <span className="meta">{kindLabels[item.kind]}</span>
+        {item.stage && <span className="meta">阶段：{item.stage.label}</span>}
       </div>
       <h3>{source.title.replace(/\s*-\s*知乎$/, '')}</h3>
       <div className="author-row">
@@ -137,33 +148,77 @@ function ExperienceCard({
           <Evidence value={item.action} />
         </div>
         <div>
-          <h4>阶段结果</h4>
+          <h4>结果相关原文 · 不代表目标达成</h4>
           <Evidence value={item.outcome} />
         </div>
       </div>
-      <div className={`comparison ${item.comparison.status}`}>
-        <div className="comparison-label">
-          <SlidersHorizontal size={15} />
-          <strong>与你的对照</strong>
-          <span>
-            {item.comparison.status === 'different'
-              ? '存在条件差异'
-              : item.comparison.status === 'similar'
-                ? '部分条件相似'
-                : '信息不足'}
-          </span>
+      {item.conditionComparisons?.length ? (
+        <section className="condition-comparisons">
+          <div className="comparison-label">
+            <SlidersHorizontal size={15} />
+            <strong>逐项条件对照</strong>
+          </div>
+          {item.conditionComparisons.map((condition) => (
+            <div
+              className="condition-comparison-row"
+              key={condition.conditionId}
+            >
+              <div>
+                <strong>{condition.label}</strong>
+                <span className={`condition-status ${condition.status}`}>
+                  {condition.status === 'different'
+                    ? '数值不同'
+                    : condition.status === 'similar'
+                      ? '数值相同'
+                      : '尚不可比'}
+                </span>
+              </div>
+              <dl>
+                <div>
+                  <dt>你的条件</dt>
+                  <dd>{condition.userValue || '未提供同口径数值'}</dd>
+                </div>
+                <div>
+                  <dt>案例条件</dt>
+                  <dd>{condition.caseValue}</dd>
+                </div>
+              </dl>
+              <p>{condition.text}</p>
+              <details className="quote-details">
+                <summary>
+                  查看条件依据 <ChevronDown size={13} />
+                </summary>
+                {condition.userQuote && <p>你的原话：{condition.userQuote}</p>}
+                <blockquote>{condition.quote}</blockquote>
+              </details>
+            </div>
+          ))}
+        </section>
+      ) : (
+        <div className={`comparison ${item.comparison.status}`}>
+          <div className="comparison-label">
+            <SlidersHorizontal size={15} />
+            <strong>与你的对照</strong>
+            <span>
+              {item.comparison.status === 'different'
+                ? '存在条件差异'
+                : item.comparison.status === 'similar'
+                  ? '部分条件相似'
+                  : '信息不足'}
+            </span>
+          </div>
+          <p>{item.comparison.text}</p>
+          {item.comparison.quote && (
+            <details className="quote-details">
+              <summary>
+                核对双方条件 <ChevronDown size={13} />
+              </summary>
+              <p>你提供的条件：{item.comparison.userQuote}</p>
+              <blockquote>{item.comparison.quote}</blockquote>
+            </details>
+          )}
         </div>
-        <p>{item.comparison.text}</p>
-        {item.comparison.quote && (
-          <details className="quote-details">
-            <summary>
-              核对双方条件 <ChevronDown size={13} />
-            </summary>
-            <p>你提供的条件：{item.comparison.userQuote}</p>
-            <blockquote>{item.comparison.quote}</blockquote>
-          </details>
-        )}
-      </div>
+      )}
       {item.missing.length > 0 && (
         <p className="missing-note">来源未说明：{item.missing.join('、')}</p>
       )}
@@ -229,10 +284,12 @@ function Followup({
 
 function ProfileDialog({
   profile,
+  intake,
   onClose,
   onSave,
 }: {
   profile: Profile;
+  intake: IntakePlan | null;
   onClose: () => void;
   onSave: (profile: Profile) => void;
 }) {
@@ -262,7 +319,11 @@ function ProfileDialog({
           </button>
         </div>
         <p className="muted">{profile.question}</p>
-        <ProfileFields profile={draft} onChange={setDraft} />
+        {intake ? (
+          <IntakeFields plan={intake} profile={draft} onChange={setDraft} />
+        ) : (
+          <ProfileFields profile={draft} onChange={setDraft} />
+        )}
         {Object.entries(draft.answers).map(([q, a]) => (
           <label className="field-label" key={q}>
             {q}
@@ -331,9 +392,172 @@ function ProfileFields({
   );
 }
 
+function IntakeFields({
+  plan,
+  profile,
+  onChange,
+}: {
+  plan: IntakePlan;
+  profile: Profile;
+  onChange: (value: Profile) => void;
+}) {
+  const unitFor = (id: string) => {
+    if (id === 'relevant_tenure') return '年';
+    if (id === 'current_term') return '学期';
+    if (id.includes('month')) return '个月';
+    if (id.includes('hour') || id === 'daily_time') return '小时';
+    return '';
+  };
+  const update = (id: string, value: string) =>
+    onChange({
+      ...profile,
+      conditionAnswers: { ...profile.conditionAnswers, [id]: value },
+    });
+  const multiOptions: Record<string, string[]> = {
+    employment_type: ['全职', '兼职', '实习', '外包 / 自由职业'],
+    application_materials: ['成绩单', '个人陈述', '推荐信', '作品集', '获奖证明'],
+  };
+  const amountUnit = (id: string) =>
+    id === 'salary_floor_amount' || id === 'monthly_essential_cost'
+      ? '元/月'
+      : '元';
+  return (
+    <div className="profile-fields">
+      {plan.fields.map((field) => (
+        <label className="field-label" key={field.id}>
+          <span>
+            {field.label}
+            <small className="meta">{field.group}</small>
+          </span>
+          {field.answerType === 'multi_select' ? (
+            <div className="multi-select-field">
+              {(multiOptions[field.id] || []).map((option) => {
+                const values = (profile.conditionAnswers?.[field.id] || '')
+                  .split('、')
+                  .filter(Boolean);
+                return (
+                  <label key={option}>
+                    <input
+                      type="checkbox"
+                      checked={values.includes(option)}
+                      onChange={(e) =>
+                        update(
+                          field.id,
+                          (e.target.checked
+                            ? [...values, option]
+                            : values.filter((value) => value !== option)
+                          ).join('、'),
+                        )
+                      }
+                    />
+                    {option}
+                  </label>
+                );
+              })}
+            </div>
+          ) : ['boolean', 'single_choice'].includes(field.answerType) ? (
+            <select
+              value={profile.conditionAnswers?.[field.id] || ''}
+              onChange={(e) => update(field.id, e.target.value)}
+            >
+              <option value="">请选择</option>
+              <option value="是">是</option>
+              <option value="否">否</option>
+              <option value="尚未核实">尚未核实</option>
+            </select>
+          ) : field.answerType === 'amount' ? (
+            <div className="amount-field">
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={
+                  profile.conditionAnswers?.[field.id]?.match(
+                    /\d+(?:\.\d+)?/,
+                  )?.[0] || ''
+                }
+                placeholder={field.question}
+                onChange={(e) =>
+                  update(
+                    field.id,
+                    e.target.value
+                      ? `${e.target.value}${amountUnit(field.id)}`
+                      : '',
+                  )
+                }
+              />
+              <span>{amountUnit(field.id)}</span>
+            </div>
+          ) : ['integer', 'number', 'duration', 'range'].includes(
+              field.answerType,
+            ) ? (
+            <input
+              type="number"
+              min="0"
+              step={field.answerType === 'integer' ? '1' : 'any'}
+              value={
+                profile.conditionAnswers?.[field.id]?.match(
+                  /\d+(?:\.\d+)?/,
+                )?.[0] || ''
+              }
+              placeholder={field.question}
+              onChange={(e) =>
+                update(
+                  field.id,
+                  e.target.value ? `${e.target.value}${unitFor(field.id)}` : '',
+                )
+              }
+            />
+          ) : field.id === 'job_posting_text' ? (
+            <textarea
+              value={profile.conditionAnswers?.[field.id] || ''}
+              maxLength={4000}
+              placeholder={field.question}
+              onChange={(e) => update(field.id, e.target.value)}
+            />
+          ) : (
+            <input
+              type={
+                field.answerType === 'date'
+                  ? 'date'
+                  : field.answerType === 'url'
+                    ? 'url'
+                    : 'text'
+              }
+              value={profile.conditionAnswers?.[field.id] || ''}
+              maxLength={400}
+              placeholder={field.question}
+              onChange={(e) => update(field.id, e.target.value)}
+            />
+          )}
+          {!['boolean', 'single_choice'].includes(field.answerType) && (
+            <button
+              className="field-unknown"
+              type="button"
+              onClick={() => update(field.id, '尚未核实')}
+            >
+              不知道 / 尚未核实
+            </button>
+          )}
+        </label>
+      ))}
+      <label className="field-label">
+        其他重要限制
+        <input
+          value={profile.goal}
+          maxLength={400}
+          placeholder="例如：不能中断收入，必须在六个月内做出决定"
+          onChange={(e) => onChange({ ...profile, goal: e.target.value })}
+        />
+      </label>
+    </div>
+  );
+}
+
 export default function Workspace() {
   const [profile, setProfile] = useState<Profile>(emptyProfile);
   const [step, setStep] = useState<'start' | 'conditions' | 'explore'>('start');
+  const [intake, setIntake] = useState<IntakePlan | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -341,6 +565,8 @@ export default function Workspace() {
   const [filter, setFilter] = useState('all');
   const [focus, setFocus] = useState('');
   const [editing, setEditing] = useState(false);
+  const [records, setRecords] = useState<ResearchSummary[]>([]);
+  const [savedRecordId, setSavedRecordId] = useState('');
   const [availability, setAvailability] = useState<{
     quota: { APIID: string; RemainingQuota: number }[] | null;
     archive: boolean;
@@ -363,6 +589,72 @@ export default function Workspace() {
     return () => ac.abort();
   }, []);
 
+  const refreshRecords = useCallback(async () => {
+    try {
+      const value = await request<{ records: ResearchSummary[] }>(
+        '/api/branches/researches',
+      );
+      setRecords(value.records);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    request<{ records: ResearchSummary[] }>('/api/branches/researches', {
+      signal: ac.signal,
+    })
+      .then((value) => setRecords(value.records))
+      .catch(() => {});
+    return () => ac.abort();
+  }, []);
+
+  async function saveResearch() {
+    if (!job || job.status !== 'done') return;
+    setError('');
+    try {
+      const saved = await request<ResearchSummary>('/api/branches/researches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: job.id }),
+      });
+      setSavedRecordId(saved.id);
+      await refreshRecords();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '研究记录保存失败。');
+    }
+  }
+
+  async function openResearch(id: string) {
+    setBusy(true);
+    setError('');
+    try {
+      const saved = await request<Job>(`/api/branches/researches/${id}`);
+      setJob(saved);
+      setSavedRecordId(id);
+      setProfile(saved.profile);
+      setPathId(saved.result?.paths[0]?.id || '');
+      setFilter('all');
+      setFocus('');
+      setIntake(null);
+      setStep('explore');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '研究记录无法打开。');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeResearch(id: string) {
+    if (!window.confirm('删除这条本地研究记录？此操作不能撤销。')) return;
+    try {
+      await request(`/api/branches/researches/${id}`, { method: 'DELETE' });
+      if (savedRecordId === id) setSavedRecordId('');
+      await refreshRecords();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '研究记录删除失败。');
+    }
+  }
+
   async function openArchive() {
     if (activeRequest.current) return;
     setError('');
@@ -374,6 +666,7 @@ export default function Workspace() {
         body: '{}',
       });
       setJob(saved);
+      setSavedRecordId('');
       setProfile(saved.profile);
       setPathId(saved.result?.paths[0]?.id || '');
       setFilter('all');
@@ -387,6 +680,52 @@ export default function Workspace() {
   }
 
   useEffect(() => () => controller.current?.abort(), []);
+
+  const prepareIntake = useCallback(async (question: string) => {
+    if (activeRequest.current) return;
+    activeRequest.current = true;
+    controller.current?.abort();
+    const ac = new AbortController();
+    controller.current = ac;
+    setBusy(true);
+    setError('');
+    try {
+      const plan = await request<IntakePlan>('/api/branches/intake', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question }),
+        signal: ac.signal,
+      });
+      if (!plan.supported) {
+        setError(plan.message);
+        return;
+      }
+      setIntake(plan);
+      setProfile({
+        ...emptyProfile,
+        question: question.trim(),
+        decisionScope: plan.scope,
+        decisionPath: plan.path,
+        decisionSector: plan.sector,
+        conditionAnswers: Object.fromEntries(
+          plan.fields
+            .filter((field) => field.initialValue)
+            .map((field) => [field.id, field.initialValue!]),
+        ),
+      });
+      setStep('conditions');
+    } catch (e) {
+      if (!ac.signal.aborted)
+        setError(
+          e instanceof Error
+            ? e.message
+            : '条件表单暂时未能生成，尚未开始知乎搜索。',
+        );
+    } finally {
+      if (!ac.signal.aborted) setBusy(false);
+      activeRequest.current = false;
+    }
+  }, []);
 
   const explore = useCallback(
     async (nextProfile: Profile, previousId?: string) => {
@@ -403,6 +742,7 @@ export default function Workspace() {
       setEditing(false);
       setProfile(nextProfile);
       setJob(null);
+      setSavedRecordId('');
       setFocus('');
       setFilter('all');
       try {
@@ -460,6 +800,15 @@ export default function Workspace() {
   const insights = (job?.result?.insights || []).filter((i) =>
     cases.some((c) => c.id === i.sourceId),
   );
+  const comparableRecords = records.filter(
+    (record) => record.question === profile.question && record.id !== savedRecordId,
+  );
+  const currentConditions = new Map([
+    ['background', profile.background],
+    ['time', profile.time],
+    ['goal', profile.goal],
+    ...Object.entries(profile.conditionAnswers || {}),
+  ]);
   const jump = (id: string) => {
     const target = paths.find((p) => p.cases.some((c) => c.id === id));
     if (target) {
@@ -565,7 +914,9 @@ export default function Workspace() {
               onClick={() => {
                 setStep('start');
                 setProfile(emptyProfile);
+                setIntake(null);
                 setJob(null);
+                setSavedRecordId('');
                 setError('');
               }}
             >
@@ -608,7 +959,7 @@ export default function Workspace() {
                 onSubmit={(e) => {
                   e.preventDefault();
                   if (profile.question.trim().length >= 2)
-                    setStep('conditions');
+                    void prepareIntake(profile.question);
                 }}
               >
                 <label htmlFor="choice">当前选择</label>
@@ -627,9 +978,18 @@ export default function Workspace() {
                   <span className="muted">一次探索一个选择</span>
                   <button
                     className="primary"
-                    disabled={profile.question.trim().length < 2}
+                    disabled={busy || profile.question.trim().length < 2}
                   >
-                    继续 <ArrowRight size={18} />
+                    {busy ? (
+                      <>
+                        <LoaderCircle className="spin" size={17} />
+                        生成条件表单
+                      </>
+                    ) : (
+                      <>
+                        继续 <ArrowRight size={18} />
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
@@ -650,6 +1010,44 @@ export default function Workspace() {
                   <ArrowRight size={18} />
                 </button>
               )}
+              {records.length > 0 && (
+                <section className="research-records">
+                  <div className="records-heading">
+                    <History size={18} />
+                    <h2>本地研究记录</h2>
+                    <span className="meta">{records.length}</span>
+                  </div>
+                  {records.map((record) => (
+                    <article key={record.id}>
+                      <button
+                        className="record-open"
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void openResearch(record.id)}
+                      >
+                        <span>
+                          <strong>{record.question}</strong>
+                          <small>
+                            {new Date(record.savedAt).toLocaleString('zh-CN')} ·{' '}
+                            {record.conditionCount} 项条件 · {record.pathCount} 条路径 ·{' '}
+                            {record.caseCount} 段经历
+                          </small>
+                        </span>
+                        <ArrowRight size={16} />
+                      </button>
+                      <button
+                        className="icon-button record-delete"
+                        type="button"
+                        title="删除记录"
+                        aria-label={`删除研究记录：${record.question}`}
+                        onClick={() => void removeResearch(record.id)}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </article>
+                  ))}
+                </section>
+              )}
               <div className="example-section">
                 <p className="muted">从一个具体选择开始</p>
                 <div className="example-choices">
@@ -658,8 +1056,9 @@ export default function Workspace() {
                       key={choice}
                       onClick={() => {
                         setProfile({ ...emptyProfile, question: choice });
-                        setStep('conditions');
+                        void prepareIntake(choice);
                       }}
+                      disabled={busy}
                     >
                       <span className="example-index">0{i + 1}</span>
                       {choice}
@@ -680,19 +1079,30 @@ export default function Workspace() {
           ) : (
             <>
               <p className="current-question">{profile.question}</p>
-              <p className="muted">只补充尚未说过的条件，不确定的可以留空。</p>
+              <p className="muted">
+                {intake?.message || '先补充影响检索的条件，不确定的可以留空。'}
+              </p>
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
                   void explore(profile);
                 }}
               >
-                <ProfileFields profile={profile} onChange={setProfile} />
+                {intake && (
+                  <IntakeFields
+                    plan={intake}
+                    profile={profile}
+                    onChange={setProfile}
+                  />
+                )}
                 <div className="form-footer">
                   <button
                     type="button"
                     className="text-button"
-                    onClick={() => setStep('start')}
+                    onClick={() => {
+                      setStep('start');
+                      setIntake(null);
+                    }}
                   >
                     <ArrowLeft size={16} />
                     修改选择
@@ -734,6 +1144,16 @@ export default function Workspace() {
             >
               <Pencil size={18} />
             </button>
+            {job?.status === 'done' && (
+              <button
+                title="保存本地研究记录"
+                disabled={Boolean(savedRecordId)}
+                onClick={() => void saveResearch()}
+              >
+                {savedRecordId ? <Check size={16} /> : <Save size={16} />}
+                {savedRecordId ? '已保存' : '保存记录'}
+              </button>
+            )}
             <div className="condition-line">
               {[
                 ['背景', profile.background],
@@ -751,8 +1171,53 @@ export default function Workspace() {
                   {a}
                 </span>
               ))}
+              {Object.entries(profile.conditionAnswers || {}).map(
+                ([id, answer]) => (
+                  <span key={id} title={id}>
+                    <Check size={13} />
+                    {answer}
+                  </span>
+                ),
+              )}
             </div>
           </section>
+          {job?.status === 'done' && comparableRecords.length > 0 && (
+            <details className="version-comparison">
+              <summary>
+                <History size={16} />
+                对比同一选择的其他条件版本 · {comparableRecords.length}
+                <ChevronDown size={15} />
+              </summary>
+              {comparableRecords.map((record) => {
+                const previous = new Map(
+                  record.conditions.map((item) => [item.id, item.value]),
+                );
+                const ids = new Set([
+                  ...currentConditions.keys(),
+                  ...previous.keys(),
+                ]);
+                const changed = [...ids].filter(
+                  (id) => (currentConditions.get(id) || '') !== (previous.get(id) || ''),
+                );
+                return (
+                  <article key={record.id}>
+                    <div>
+                      <strong>
+                        {new Date(record.savedAt).toLocaleString('zh-CN')}
+                      </strong>
+                      <span className="meta">
+                        {changed.length} 项条件不同 · {record.pathCount} 条路径 ·{' '}
+                        {record.caseCount} 段经历
+                      </span>
+                    </div>
+                    <button onClick={() => void openResearch(record.id)}>
+                      打开此版本 <ArrowRight size={14} />
+                    </button>
+                  </article>
+                );
+              })}
+            </details>
+          )}
           {busy ? (
             <section className="loading-region" aria-live="polite">
               <div className="loading-symbol">
@@ -808,7 +1273,7 @@ export default function Workspace() {
                     </div>
                     <div className="tree-root">
                       <span className="root-dot" />
-                      这个选择
+                      {job?.result?.decisionClassification?.label || '这个选择'}
                     </div>
                     <nav aria-label="行动路径">
                       {paths.map((p, i) => (
@@ -858,6 +1323,80 @@ export default function Workspace() {
                       </div>
                       <span className="meta">{cases.length} 段经历</span>
                     </div>
+                    {job?.result?.jobRequirementAssessment?.sampleCount ? (
+                      <section className="job-requirements">
+                        <div>
+                          <h3>目标岗位要求校准</h3>
+                          <span className="meta">
+                            当前样本{' '}
+                            {job.result.jobRequirementAssessment.sampleCount} 条
+                            {' '}· 岗位：
+                            {job.result.jobRequirementAssessment.role ||
+                              '未提供'}
+                            · 地区：
+                            {job.result.jobRequirementAssessment.region ||
+                              '未提供'}{' '}
+                            · 日期：
+                            {job.result.jobRequirementAssessment.publishedAt ||
+                              '未提供'}
+                          </span>
+                        </div>
+                        <dl>
+                          {job.result.jobRequirementAssessment.requirements.map(
+                            (item) => (
+                              <div key={item.id}>
+                                <dt>
+                                  {item.label}
+                                  <span className={`requirement-status ${item.status}`}>
+                                    {item.status === 'met'
+                                      ? '已满足'
+                                      : item.status === 'gap'
+                                        ? '有差距'
+                                        : item.status === 'mixed'
+                                          ? '部分满足'
+                                          : '待对照'}
+                                  </span>
+                                </dt>
+                                <dd>{item.value}</dd>
+                                <dd className="meta">
+                                  你的条件：
+                                  {item.userValue || '未提供同口径信息'}
+                                </dd>
+                              </div>
+                            ),
+                          )}
+                        </dl>
+                        {job.result.jobRequirementAssessment.missing.length >
+                          0 && (
+                          <p className="meta">
+                            还缺：
+                            {job.result.jobRequirementAssessment.missing.join(
+                              '、',
+                            )}
+                          </p>
+                        )}
+                      </section>
+                    ) : null}
+                    {path?.costAssessment && (
+                      <section className="path-costs">
+                        <h3>这条路径的成本与约束</h3>
+                        {path.costAssessment.conflicts.map((item) => (
+                          <p className="cost-conflict" key={item}>
+                            <TriangleAlert size={15} /> {item}
+                          </p>
+                        ))}
+                        <p>
+                          <strong>已知：</strong>
+                          {path.costAssessment.known.join('；') ||
+                            '尚无可量化输入'}
+                        </p>
+                        <p>
+                          <strong>还缺：</strong>
+                          {path.costAssessment.missing.join('、') ||
+                            '当前成本字段已填写'}
+                        </p>
+                      </section>
+                    )}
                     <div className="insight-grid">
                       {(['practice', 'risk'] as const).map((type) => (
                         <section key={type}>
@@ -878,6 +1417,14 @@ export default function Workspace() {
                                 <div className="insight" key={index}>
                                   <h4>{i.title}</h4>
                                   <p>{i.text}</p>
+                                  <p className="insight-applicability">
+                                    <strong>
+                                      {i.type === 'practice'
+                                        ? '为什么值得参考：'
+                                        : '为什么与你相关：'}
+                                    </strong>
+                                    {i.applicability}
+                                  </p>
                                   <button
                                     className="text-button"
                                     onClick={() => jump(i.sourceId)}
@@ -975,6 +1522,12 @@ export default function Workspace() {
                             void explore(
                               {
                                 ...profile,
+                                conditionAnswers: q.conditionId
+                                  ? {
+                                      ...profile.conditionAnswers,
+                                      [q.conditionId]: answer,
+                                    }
+                                  : profile.conditionAnswers,
                                 answers: {
                                   ...profile.answers,
                                   [q.question]: answer,
@@ -1029,6 +1582,115 @@ export default function Workspace() {
                   </section>
                 )
               )}
+              {Boolean(job?.officialSources?.length) && (
+                <section className="official-sources-section">
+                  <div className="official-heading">
+                    <ShieldCheck size={18} />
+                    <div>
+                      <h2>学校或政府官方材料</h2>
+                      <p className="meta">
+                        与知乎个人经验分开，仅表示页面当前内容。
+                      </p>
+                    </div>
+                  </div>
+                  {job?.officialSources?.map((source) => (
+                    <article key={source.id}>
+                      <div>
+                        <h3>{source.title}</h3>
+                        <a
+                          className="source-link"
+                          href={source.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          官方原文 <ArrowUpRight size={14} />
+                        </a>
+                      </div>
+                      <p className="meta">
+                        {source.host} · 页面年份：
+                        {source.years.length
+                          ? source.years.join('、')
+                          : '未识别'}{' '}
+                        · 材料类型：
+                        {source.documentTypes?.length
+                          ? source.documentTypes.join('、')
+                          : '待确认'}{' '}
+                        · 读取于{' '}
+                        {new Date(source.retrievedAt).toLocaleString('zh-CN')}
+                      </p>
+                      <p>{source.excerpt}</p>
+                    </article>
+                  ))}
+                  {job?.officialAssessment && (
+                    <div className="official-assessment">
+                      {(['eligibility', 'cost'] as const).map((group) => (
+                        <section key={group}>
+                          <h3>
+                            {group === 'eligibility'
+                              ? '申请可行性核对'
+                              : '课程与毕业成本'}
+                          </h3>
+                          {job
+                            .officialAssessment!.checks.filter(
+                              (item) => item.group === group,
+                            )
+                            .map((item) => (
+                              <div className="official-check" key={item.id}>
+                                <div>
+                                  <strong>{item.label}</strong>
+                                  <span
+                                    className={`check-status ${item.status}`}
+                                  >
+                                    {item.status === 'satisfied'
+                                      ? '已满足'
+                                      : item.status === 'not_satisfied'
+                                        ? '未满足'
+                                        : item.status === 'conflict'
+                                          ? '信息冲突'
+                                          : item.status === 'confirmed'
+                                            ? '官方已说明'
+                                            : '待核实'}
+                                  </span>
+                                </div>
+                                <p>官方信息：{item.officialValue}</p>
+                                {item.userValue && (
+                                  <p>你的条件：{item.userValue}</p>
+                                )}
+                                <details className="quote-details">
+                                  <summary>
+                                    官方原文依据 <ChevronDown size={13} />
+                                  </summary>
+                                  <blockquote>{item.quote}</blockquote>
+                                </details>
+                              </div>
+                            ))}
+                          {group === 'cost' &&
+                            !job.officialAssessment!.estimates?.length && (
+                              <p className="meta">
+                                当前没有足够输入生成成本估算，以下仅区分官方事实与待核实项。
+                              </p>
+                            )}
+                          {job
+                            .officialAssessment!.missing.filter(
+                              (item) => item.group === group,
+                            )
+                            .map((item) => (
+                              <div
+                                className="official-check missing"
+                                key={item.id}
+                              >
+                                <strong>{item.label}</strong>
+                                <span className="check-status unknown">
+                                  官方页面未识别
+                                </span>
+                              </div>
+                            ))}
+                        </section>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
               {Boolean(job?.sources.length) && (
                 <details className="sources-section">
                   <summary>
@@ -1075,6 +1737,7 @@ export default function Workspace() {
       {editing && (
         <ProfileDialog
           profile={profile}
+          intake={intake}
           onClose={() => setEditing(false)}
           onSave={(p) =>
             void explore(p, job?.sources.length ? job.id : undefined)

@@ -1,0 +1,141 @@
+const majorRoutes = {
+  campus_transfer: { label: '校内转专业', pattern: /转专业|转入|转出|跨学院/ },
+  cross_major_graduate: {
+    label: '跨专业读研',
+    pattern: /跨考|跨专业.{0,8}(?:考研|读研|研究生)/,
+  },
+  minor: { label: '辅修', pattern: /辅修/ },
+  second_bachelor: { label: '第二学士学位', pattern: /二学位|第二学士/ },
+};
+
+const careerPaths = [
+  {
+    id: 'internal_transfer',
+    label: '内部转岗',
+    pattern: /内部转岗|内部竞聘|公司内部.{0,6}转/,
+  },
+  {
+    id: 'fulltime_preparation',
+    label: '脱产准备',
+    pattern: /裸辞|脱产|辞职后|离职后/,
+  },
+  {
+    id: 'employed_preparation',
+    label: '在职准备',
+    pattern: /在职|边工作边|下班后|业余时间/,
+  },
+  {
+    id: 'adjacent_role',
+    label: '相邻岗位过渡',
+    pattern: /相邻岗位|过渡岗位|先(?:做|从).{0,8}(?:助理|初级)|先从(?:助理|初级)/,
+  },
+  {
+    id: 'project_trial',
+    label: '小项目验证',
+    pattern: /作品集|做了?.{0,8}项目|项目实践|副业验证/,
+  },
+  {
+    id: 'direct_application',
+    label: '直接投递',
+    pattern: /直接投递|海投|投递.{0,8}简历|开始求职/,
+  },
+];
+
+function sourceText(source, action = '') {
+  return [source?.title, ...(source?.snippets || []), action]
+    .filter(Boolean)
+    .join('\n');
+}
+
+const industryAliases = [
+  ['software', /软件|互联网|IT|信息技术|科技/iu],
+  ['retail', /零售|商超|门店/],
+  ['finance', /金融|银行|证券|保险/],
+  ['education', /教育|学校|培训/],
+  ['manufacturing', /制造|工厂|工业/],
+  ['healthcare', /医疗|医药|健康/],
+];
+const functionAliases = [
+  ['engineering', /开发|程序|前端|后端|工程师|编程/],
+  ['operations', /运营|增长|投放|内容运营/],
+  ['sales', /销售|商务|客户经理/],
+  ['design', /设计|UI|UX|交互/iu],
+  ['finance', /会计|财务|审计/],
+  ['product', /产品经理|产品运营/],
+  ['teaching', /教师|老师|讲师|教学/],
+];
+
+function canonical(value, aliases) {
+  const text = String(value || '').trim();
+  return aliases.find(([, pattern]) => pattern.test(text))?.[0] || text;
+}
+
+export function sourceMatchesDecisionPath(source, decisionPath) {
+  const selected = majorRoutes[decisionPath];
+  if (!selected) return true;
+  const text = sourceText(source);
+  if (selected.pattern.test(text)) return true;
+  return !Object.entries(majorRoutes).some(
+    ([id, route]) => id !== decisionPath && route.pattern.test(text),
+  );
+}
+
+export function classifyCareerMove(profile) {
+  const answers = profile.conditionAnswers || {};
+  const currentIndustry = answers.current_industry?.trim();
+  const targetIndustry = answers.target_industry?.trim();
+  const currentFunction = answers.current_job_function?.trim();
+  const targetFunction = answers.target_job_function?.trim();
+  if (
+    !currentIndustry ||
+    !targetIndustry ||
+    !currentFunction ||
+    !targetFunction
+  )
+    return { id: 'unknown', label: '行业与职能变化待确认' };
+  const industryChanged =
+    canonical(currentIndustry, industryAliases) !==
+    canonical(targetIndustry, industryAliases);
+  const functionChanged =
+    canonical(currentFunction, functionAliases) !==
+    canonical(targetFunction, functionAliases);
+  if (!industryChanged && functionChanged)
+    return { id: 'same_industry_role_change', label: '同行业转岗' };
+  if (industryChanged && !functionChanged)
+    return { id: 'cross_industry_same_function', label: '跨行业同职能' };
+  if (industryChanged && functionChanged)
+    return { id: 'cross_industry_role_change', label: '行业与职能同时变化' };
+  return { id: 'same_role', label: '行业与职能均未变化' };
+}
+
+export function groupCasesByPath(cases, profile, sources) {
+  const groups = new Map();
+  for (const item of cases) {
+    let path;
+    if (profile.decisionScope === 'major_transition') {
+      const route =
+        majorRoutes[profile.decisionPath] || majorRoutes.campus_transfer;
+      path = {
+        id: profile.decisionPath || 'campus_transfer',
+        label: route.label,
+      };
+    } else {
+      const text = sourceText(sources.get(item.sourceId), item.action?.quote);
+      path = careerPaths.find((candidate) => candidate.pattern.test(text)) || {
+        id: 'preparation_mode_unknown',
+        label: '准备方式待确认',
+      };
+    }
+    if (!groups.has(path.id))
+      groups.set(path.id, { id: path.id, name: path.label, cases: [] });
+    groups.get(path.id).cases.push(item);
+  }
+  return [...groups.values()].slice(0, 7);
+}
+
+export function decisionPathTerm(profile) {
+  if (profile.decisionScope === 'major_transition')
+    return (majorRoutes[profile.decisionPath] || majorRoutes.campus_transfer)
+      .label;
+  return classifyCareerMove(profile).label;
+}

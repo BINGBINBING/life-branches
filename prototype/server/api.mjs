@@ -1,12 +1,25 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { analyze, search, validProfile, cli } from './engine.mjs';
+import {
+  analyze,
+  rematchAnalysis,
+  search,
+  validProfile,
+  cli,
+  validateAnalysis,
+} from './engine.mjs';
 import { curatedArchive } from './archive-annotations.mjs';
+import { fetchOfficialSources } from './official-source.mjs';
+import { buildOfficialAssessment } from './official-assessment.mjs';
 import { analysisProvider, requiredQuotaIds } from './deepseek.mjs';
+import { createIntakePlan } from './intake.mjs';
+import { createResearchStore } from './research-store.mjs';
+import { createTelemetry, failureCategory } from './telemetry.mjs';
 
 const jobs = new Map();
 let active = 0;
+let intakeActive = 0;
 let quota = null;
 let quotaAt = 0;
 const send = (res, status, data) => {
@@ -30,7 +43,9 @@ async function body(req) {
   }
 }
 
-export function localApi() {
+export function localApi(options = {}) {
+  const researchStore = createResearchStore(options.researchStorePath);
+  const telemetry = createTelemetry(options.telemetryPath);
   return {
     name: 'life-branches-local-api',
     configureServer(server) {
@@ -78,6 +93,70 @@ export function localApi() {
             });
           }
           if (
+            req.method === 'GET' &&
+            url.pathname === '/api/branches/researches'
+          ) {
+            return send(res, 200, { records: await researchStore.list() });
+          }
+          if (
+            req.method === 'GET' &&
+            url.pathname === '/api/branches/metrics'
+          ) {
+            return send(res, 200, await telemetry.summary());
+          }
+          const researchMatch = url.pathname.match(
+            /^\/api\/branches\/researches\/([^/]+)$/,
+          );
+          if (researchMatch && req.method === 'GET') {
+            const record = await researchStore.get(researchMatch[1]);
+            if (!record)
+              return send(res, 404, { error: '这条研究记录不存在。' });
+            const restored = {
+              ...record.job,
+              id: randomUUID(),
+              createdAt: Date.now(),
+              restoredFrom: record.id,
+            };
+            jobs.set(restored.id, restored);
+            return send(res, 200, restored);
+          }
+          if (researchMatch && req.method === 'DELETE') {
+            const removed = await researchStore.remove(researchMatch[1]);
+            return removed
+              ? send(res, 200, { ok: true })
+              : send(res, 404, { error: '这条研究记录不存在。' });
+          }
+          if (
+            req.method === 'POST' &&
+            url.pathname === '/api/branches/researches'
+          ) {
+            const input = await body(req);
+            const job = jobs.get(input?.jobId);
+            return send(res, 201, await researchStore.save(job));
+          }
+          if (
+            req.method === 'POST' &&
+            url.pathname === '/api/branches/intake'
+          ) {
+            if (
+              !String(req.headers['content-type']).startsWith(
+                'application/json',
+              )
+            )
+              return send(res, 415, { error: '请求格式不正确。' });
+            const input = await body(req);
+            if (intakeActive >= 2)
+              return send(res, 429, {
+                error: '已有条件表单正在生成，请稍后重试。',
+              });
+            intakeActive++;
+            try {
+              return send(res, 200, await createIntakePlan(input?.question));
+            } finally {
+              intakeActive--;
+            }
+          }
+          if (
             req.method === 'POST' &&
             url.pathname === '/api/branches/archive'
           ) {
@@ -95,6 +174,11 @@ export function localApi() {
               }
               const job = {
                 ...saved,
+                result: validateAnalysis(
+                  saved.result,
+                  saved.sources,
+                  saved.profile,
+                ),
                 id: randomUUID(),
                 createdAt: Date.now(),
                 historical: true,
@@ -135,7 +219,9 @@ export function localApi() {
           const previous = input.previousId ? jobs.get(input.previousId) : null;
           if (
             input.previousId &&
-            (!previous || previous.profile.question !== profile.question)
+            (!previous ||
+              Date.now() - previous.createdAt > 3600000 ||
+              previous.profile.question !== profile.question)
           )
             return send(res, 400, { error: '旧探索已不可用，请重新搜索。' });
           for (const [id, job] of jobs)
@@ -161,17 +247,40 @@ export function localApi() {
             createdAt: Date.now(),
             profile,
             sources: previous?.sources || [],
+            officialSources: previous?.officialSources || [],
+            officialAssessment: previous?.officialAssessment || null,
             result: null,
             error: null,
             reused: Boolean(previous),
             historical: previous?.historical || false,
+            metrics: { searchCalls: 0, cacheHits: 0, stages: [] },
           };
           jobs.set(job.id, job);
           active++;
           send(res, 202, { id: job.id });
           void (async () => {
+            const requestStarted = Date.now();
+            const recordMetric = (metric) => {
+              job.metrics.searchCalls += metric.searchCalls || 0;
+              job.metrics.cacheHits += metric.cacheHits || 0;
+              job.metrics.stages.push(metric);
+              void telemetry.record({ requestId: job.id, event: 'stage', ...metric });
+            };
             try {
-              if (!previous)
+              if (!previous) {
+                job.progress = '正在读取你提供的官方通知…';
+                const officialStarted = Date.now();
+                job.officialSources = await fetchOfficialSources(profile);
+                recordMetric({
+                  stage: 'official_source',
+                  status: 'ok',
+                  elapsedMs: Date.now() - officialStarted,
+                  sourceCount: job.officialSources.length,
+                });
+                job.officialAssessment = buildOfficialAssessment(
+                  job.officialSources,
+                  profile,
+                );
                 job.sources = await search(
                   profile,
                   (message) => {
@@ -180,15 +289,67 @@ export function localApi() {
                   (sources) => {
                     job.sources = sources;
                   },
+                  recordMetric,
                 );
-              job.result = await analyze(job.sources, profile, (message) => {
-                job.progress = message;
+              }
+              if (previous)
+                job.officialAssessment = buildOfficialAssessment(
+                  job.officialSources,
+                  profile,
+                );
+              const analysisStarted = Date.now();
+              job.result = previous
+                ? rematchAnalysis(previous.result, job.sources, profile)
+                : await analyze(job.sources, profile, (message) => {
+                    job.progress = message;
+                  });
+              recordMetric({
+                stage: 'analysis',
+                status: 'ok',
+                elapsedMs: Date.now() - analysisStarted,
+                provider: job.result.analysis?.provider || analysisProvider(),
+                model: job.result.analysis?.model || 'none',
+                ruleVersion: job.result.ruleVersion || 'unknown',
+                acceptedCases: job.result.paths.reduce(
+                  (sum, path) => sum + path.cases.length,
+                  0,
+                ),
+                rejected: job.result.rejected,
+                rejectionReasons: job.result.rejectionReasons,
+                citationPassRate: job.result.citationPassRate,
               });
               job.status = 'done';
               job.progress = '探索完成';
+              void telemetry.record({
+                requestId: job.id,
+                event: 'completed',
+                status: 'ok',
+                elapsedMs: Date.now() - requestStarted,
+                searchCalls: job.metrics.searchCalls,
+                cacheHits: job.metrics.cacheHits,
+                sourceCount: job.sources.length,
+                provider: job.result.analysis?.provider || analysisProvider(),
+                model: job.result.analysis?.model || 'none',
+                ruleVersion: job.result.ruleVersion || 'unknown',
+                acceptedCases: job.result.paths.reduce(
+                  (sum, path) => sum + path.cases.length,
+                  0,
+                ),
+                rejected: job.result.rejected,
+                rejectionReasons: job.result.rejectionReasons,
+                citationPassRate: job.result.citationPassRate,
+              });
             } catch (error) {
               job.status = 'error';
               job.error = error.message || '探索暂时未能完成。';
+              void telemetry.record({
+                requestId: job.id,
+                event: 'failed',
+                status: failureCategory(error),
+                elapsedMs: Date.now() - requestStarted,
+                searchCalls: job.metrics.searchCalls,
+                cacheHits: job.metrics.cacheHits,
+              });
             } finally {
               active--;
               quotaAt = 0;

@@ -22,6 +22,14 @@
     "typeAware": true,
     "typeCheck": true
   },
+  "overrides": [
+    {
+      "files": ["server/*.test.mjs"],
+      "rules": {
+        "typescript/no-floating-promises": "off"
+      }
+    }
+  ],
   "ignorePatterns": [
     ".next/**",
     ".vinext/**",

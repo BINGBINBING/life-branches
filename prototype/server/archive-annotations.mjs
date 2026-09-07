@@ -151,7 +151,11 @@ const raw = {
 
 export function curatedArchive() {
   const result = validateAnalysis(raw, sources, profile);
-  if (result.paths.length !== 3 || result.rejected)
+  const caseCount = result.paths.reduce(
+    (sum, path) => sum + path.cases.length,
+    0,
+  );
+  if (caseCount !== 3 || result.rejected)
     throw new Error('Historical evidence validation failed');
   return {
     status: 'done',
