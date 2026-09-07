@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
   ArrowLeft,
   ArrowRight,
@@ -890,13 +891,43 @@ export default function Workspace() {
     return () => lifecycle.abort();
   }, [profile, job, step, busy, paths]);
 
+  function returnHome() {
+    controller.current?.abort();
+    setStep('start');
+    setProfile(emptyProfile);
+    setFirstFormState({
+      age: '',
+      edu: '',
+      city: '',
+      current: '',
+      materials: '',
+      target: '',
+    });
+    setJob(null);
+    setBusy(false);
+    setError('');
+    setEditing(false);
+    setShowKeys(false);
+    setShowHistory(false);
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
         <div className="brand">
           <GitBranch size={26} />
-          <strong>人生分枝</strong>
-          <span>经验探索</span>
+          <strong>
+            <Link
+              href="/"
+              onClick={(event) => {
+                event.preventDefault();
+                returnHome();
+              }}
+            >
+              人生分枝
+            </Link>
+          </strong>
+          <span>基于知乎优质解答的经验探索工具</span>
         </div>
         <div className="header-right">
           <span className="source-label">
@@ -1021,7 +1052,7 @@ export default function Workspace() {
             {step === 'start' ? '一个选择，不同走法' : '把经验放回你的处境'}
           </div>
           <h1>
-            {step === 'start' ? '你正在考虑什么选择？' : '先了解一点你的情况'}
+            {step === 'start' ? '你想探索什么方向？' : '先了解一点你的情况'}
           </h1>
           {step === 'start' ? (
             <>
@@ -1050,36 +1081,44 @@ export default function Workspace() {
                 }}
               >
                 <div className="field-grid">
+                  <label className="field-label span2">
+                    想探索的方向 / 目标
+                    <input
+                      required
+                      value={firstForm.target}
+                      placeholder="例如：转专业到计算机科学 / 转行做餐饮"
+                      onChange={(e) => setFirstForm({ target: e.target.value })}
+                    />
+                  </label>
+
+                  <p className="form-hint">
+                    请再补充一些你的情况，帮助我们更贴近你的处境。
+                  </p>
+
                   <label className="field-label">
                     年龄
                     <input
-                      type="number"
-                      min={10}
-                      max={80}
+                      type="text"
+                      inputMode="numeric"
                       value={firstForm.age}
-                      placeholder="例如 19"
+                      placeholder="例如 18"
                       onChange={(e) => setFirstForm({ age: e.target.value })}
                     />
                   </label>
                   <label className="field-label">
                     学历
-                    <select
+                    <input
+                      type="text"
                       value={firstForm.edu}
+                      placeholder="例如：本科在读 / 硕士 / 高中毕业"
                       onChange={(e) => setFirstForm({ edu: e.target.value })}
-                    >
-                      <option value="">请选择</option>
-                      <option>本科在读</option>
-                      <option>硕士研究生</option>
-                      <option>博士研究生</option>
-                      <option>大专 / 专科</option>
-                      <option>其他</option>
-                    </select>
+                    />
                   </label>
                   <label className="field-label">
                     所在城市
                     <input
                       value={firstForm.city}
-                      placeholder="例如 太原"
+                      placeholder="例如 北京"
                       onChange={(e) => setFirstForm({ city: e.target.value })}
                     />
                   </label>
@@ -1087,7 +1126,7 @@ export default function Workspace() {
                     当前专业 / 行业
                     <input
                       value={firstForm.current}
-                      placeholder="例如：软件学院 / 电商运营"
+                      placeholder="例如：土木工程 / 电商运营"
                       onChange={(e) => setFirstForm({ current: e.target.value })}
                     />
                   </label>
@@ -1101,23 +1140,14 @@ export default function Workspace() {
                       }
                     />
                   </label>
-                  <label className="field-label span2">
-                    想走的方向
-                    <input
-                      required
-                      value={firstForm.target}
-                      placeholder="例如：转专业到机器人学院 / 转行做数据分析"
-                      onChange={(e) => setFirstForm({ target: e.target.value })}
-                    />
-                  </label>
                 </div>
                 <div className="form-footer">
-                  <span className="muted">第二步会让你补充投入时间与限制</span>
+                  <span className="muted">第二步会需要补充投入时间与限制（选填）</span>
                   <button
                     className="primary"
                     disabled={!firstFormValid()}
                   >
-                    继续补充条件 <ArrowRight size={18} />
+                    继续补充条件（选填） <ArrowRight size={18} />
                   </button>
                 </div>
               </form>

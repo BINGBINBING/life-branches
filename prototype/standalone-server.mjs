@@ -107,7 +107,13 @@ async function loadPageHandler() {
   const mod = await import('./dist/server/index.js');
   const exported = mod.default || mod;
   // worker 形态入口可能是 { fetch } 对象，也可能是函数
-  pageHandler = typeof exported === 'function' ? exported : exported?.fetch;
+  if (typeof exported === 'function') {
+    pageHandler = exported;
+  } else if (exported && typeof exported.fetch === 'function') {
+    pageHandler = exported.fetch.bind(exported);
+  } else {
+    pageHandler = null;
+  }
   if (typeof pageHandler !== 'function')
     throw new Error('dist 页面产物未导出 fetch handler（请先 npm run build）。');
   return pageHandler;

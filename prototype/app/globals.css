@@ -1109,7 +1109,7 @@ label {
   padding: 72px 32px 32px;
 }
 .eyebrow {
-  font-size: 14px;
+  font-size: 20px;
   color: var(--green);
   margin-bottom: 14px;
 }
@@ -1282,6 +1282,25 @@ label {
 .field-grid .span2 {
   grid-column: span 2;
 }
+.form-hint {
+  grid-column: span 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 0 -2px;
+  padding-top: 2px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.form-hint::before {
+  content: '';
+  width: 3px;
+  height: 18px;
+  flex: 0 0 3px;
+  border-radius: 999px;
+  background: #9bc4a9;
+}
 .field-grid .field-label {
   display: flex;
   flex-direction: column;
@@ -1357,6 +1376,9 @@ label {
     grid-template-columns: 1fr;
   }
   .field-grid .span2 {
+    grid-column: span 1;
+  }
+  .form-hint {
     grid-column: span 1;
   }
 }
