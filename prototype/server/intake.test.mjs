@@ -55,6 +55,26 @@ test('AI may select dictionary ids but cannot invent form fields', async () => {
   assert.ok(plan.fields.length >= 4 && plan.fields.length <= 6);
 });
 
+test('local intake fallback keeps the pre-search form usable when AI fails', async () => {
+  const plan = await createIntakePlan(
+    '我从机械专业转到计算机专业，每天能投入两小时',
+    {
+      ask: async () => {
+        throw new Error('provider unavailable');
+      },
+    },
+  );
+  assert.equal(plan.supported, true);
+  assert.equal(plan.scope, 'major_transition');
+  assert.equal(plan.path, 'campus_transfer');
+  assert.equal(plan.generatedBy, 'local-fallback');
+  assert.ok(plan.fields.length >= 4);
+  assert.equal(
+    plan.fields.find((field) => field.id === 'current_major')?.initialValue,
+    '机械',
+  );
+});
+
 test('selected fields are filtered by route and sector', () => {
   const plan = normalizeIntake('想转行做开发', {
     scope: 'career_transition',

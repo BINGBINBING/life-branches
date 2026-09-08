@@ -1689,6 +1689,12 @@ export default function Workspace() {
                   <p>
                     我已经把你明确说出的条件录入表单。请集中补充仍为空的基础条件，并检查自动填写是否准确。
                   </p>
+                  {intake?.generatedBy === 'local-fallback' && (
+                    <output className="intake-fallback">
+                      <TriangleAlert size={16} />
+                      DeepSeek 暂时不可用，当前表单由本地规则生成。你仍可继续，但自动识别的条件可能不完整，请重点检查并补充空项。
+                    </output>
+                  )}
                   {intake && (
                     <div className="intake-summary">
                       <span>

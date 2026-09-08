@@ -308,10 +308,17 @@ export async function createIntakePlan(question, options = {}) {
 4. extracted \u53ea\u653e\u7528\u6237\u5df2\u660e\u786e\u8bf4\u51fa\u7684\u503c\uff1bquote \u5fc5\u987b\u662f\u7528\u6237\u539f\u8bdd\u4e2d\u5b8c\u5168\u4e00\u81f4\u7684\u8fde\u7eed\u7247\u6bb5\u3002\u6ca1\u8bf4\u7684\u6761\u4ef6\u4e0d\u586b\u3002
 \u6761\u4ef6\u76ee\u5f55\uff1a${JSON.stringify(catalogue())}`;
   const ask = options.ask || ((value) => deepseekJSON(value));
-  const result = await ask(prompt);
-  const raw = result?.value || result;
-  return {
-    ...normalizeIntake(question.trim(), raw),
-    generatedBy: result?.metadata?.provider || 'test',
-  };
+  try {
+    const result = await ask(prompt);
+    const raw = result?.value || result;
+    return {
+      ...normalizeIntake(question.trim(), raw),
+      generatedBy: result?.metadata?.provider || 'test',
+    };
+  } catch {
+    return {
+      ...normalizeIntake(question.trim()),
+      generatedBy: 'local-fallback',
+    };
+  }
 }

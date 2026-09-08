@@ -1691,6 +1691,22 @@ label {
 .intake-review .assistant-turn {
   margin-bottom: 28px;
 }
+.intake-fallback {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-left: 3px solid #a66b19;
+  background: #fff8e8;
+  color: #70450f;
+  font-size: 13px !important;
+  line-height: 1.55 !important;
+}
+.intake-fallback svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
 .intake-summary {
   display: flex;
   gap: 10px;
