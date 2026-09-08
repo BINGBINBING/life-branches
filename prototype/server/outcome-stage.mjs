@@ -130,6 +130,7 @@ export function validateOutcomeStage(source, raw, scope, validQuote) {
     label: stage.label,
     result: stage.result,
     quote,
+    scopeNote: stageScopeNote(stage, scope),
   };
 }
 
@@ -148,6 +149,23 @@ const stagePriority = [
   'assessment_failed',
   'application_ineligible',
 ];
+
+function stageScopeNote(stage, scope) {
+  if (stage.result === 'setback')
+    return scope === 'major_transition'
+      ? '只证明本次申请或考核受挫，不证明其他申请机会或替代路径不可行。'
+      : '只证明本次求职阶段受挫，不证明整个转行选择失败。';
+  if (scope === 'major_transition') {
+    if (stage.id === 'transfer_completed')
+      return '只证明已转入目标专业，不证明后续适应、毕业或就业结果。';
+    return '只证明已到达该申请阶段，不证明已转入、后续适应、毕业或就业成功。';
+  }
+  if (stage.id === 'probation_passed')
+    return '只证明已通过试用期，不证明长期适配、收入增长或职业发展结果。';
+  if (stage.id === 'joined_target_role')
+    return '只证明已入职目标岗位，不证明已通过试用期或长期适配。';
+  return '只证明已到达该求职阶段，不证明已入职、通过试用期或长期适配。';
+}
 
 export function discoverOutcomeStage(source, scope, validQuote) {
   const clauses = [source.title, ...(source.snippets || [])]

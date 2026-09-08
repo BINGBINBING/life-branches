@@ -134,4 +134,16 @@ test('explicit approval wording still proves only the approval stage', () => {
   );
   assert.equal(stage.id, 'transfer_approved');
   assert.equal(stage.quote, '我的转专业申请最终获批');
+  assert.match(stage.scopeNote, /不证明已转入/);
+});
+
+test('verified employment stages state which later outcomes remain unknown', () => {
+  const source = { snippets: ['我后来入职前端开发工程师。'] };
+  const stage = validateOutcomeStage(
+    source,
+    { stageId: 'joined_target_role', quote: '我后来入职前端开发工程师' },
+    'career_transition',
+    validQuote,
+  );
+  assert.match(stage.scopeNote, /不证明已通过试用期或长期适配/);
 });

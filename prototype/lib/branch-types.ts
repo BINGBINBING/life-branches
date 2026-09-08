@@ -96,6 +96,7 @@ export type Experience = {
     label: string;
     result: 'success' | 'setback';
     quote: string;
+    scopeNote?: string;
   } | null;
   comparison: {
     text: string;

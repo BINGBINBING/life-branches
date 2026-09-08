@@ -88,8 +88,8 @@ const exampleChoices = [
   '想从工科转到设计专业',
 ];
 const resultLabels = {
-  success: '阶段目标达成',
-  setback: '阶段受挫',
+  success: '正向阶段已核对',
+  setback: '受挫阶段已核对',
   mixed: '有得有失',
   unknown: '结果待核实',
 };
@@ -162,7 +162,9 @@ function ExperienceCard({
           {resultLabels[item.result]}
         </span>
         <span className="meta">{kindLabels[item.kind]}</span>
-        {item.stage && <span className="meta">阶段：{item.stage.label}</span>}
+        {item.stage && (
+          <span className="meta">当前最远可验证阶段：{item.stage.label}</span>
+        )}
       </div>
       <h3>{source.title.replace(/\s*-\s*知乎$/, '')}</h3>
       <div className="author-row">
@@ -180,11 +182,15 @@ function ExperienceCard({
           <Evidence value={item.action} />
         </div>
         <div>
-          <h4>{item.stage ? `已核对阶段：${item.stage.label}` : '结果仍待核实'}</h4>
+          <h4>{item.stage ? '当前最远可验证阶段' : '结果仍待核实'}</h4>
           {item.stage ? (
             <>
+              <strong>{item.stage.label}</strong>
               <blockquote>{item.stage.quote}</blockquote>
-              <p className="meta">仅说明这一阶段，后续适应、毕业或就业情况需另行核对。</p>
+              <p className="meta">
+                {item.stage.scopeNote ||
+                  '仅说明这一阶段，不代表整个选择成功或失败。'}
+              </p>
               {item.outcome && item.outcome.quote !== item.stage.quote && (
                 <details className="quote-details">
                   <summary>其他结果片段 <ChevronDown size={13} /></summary>
@@ -2000,7 +2006,7 @@ export default function Workspace() {
                                 p.cases.filter((c) => c.result === 'success')
                                   .length
                               }{' '}
-                              项阶段达成
+                              项正向阶段已核对
                             </small>
                           </div>
                           <ChevronRight size={15} />
@@ -2014,7 +2020,7 @@ export default function Workspace() {
                         <br />
                         个人自述尚未经独立核实。
                         <br />
-                        “阶段达成”仅统计本次入选经历中有阶段引文的案例，每段计一次，不代表整条路径成功率。
+                        “正向阶段已核对”仅统计本次入选经历中有阶段引文的案例，每段计一次，不代表整条路径成功率。
                       </p>
                     </div>
                   </aside>
@@ -2165,8 +2171,8 @@ export default function Workspace() {
                       >
                         {[
                           ['all', '全部'],
-                          ['success', '阶段达成'],
-                          ['setback', '阶段受挫'],
+                          ['success', '正向阶段已核对'],
+                          ['setback', '受挫阶段已核对'],
                           ['mixed', '有得有失'],
                           ['unknown', '结果未明'],
                         ].map(([key, label]) => (
