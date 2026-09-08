@@ -5,7 +5,20 @@ import {
   expansionSources,
 } from './condition-expansion.mjs';
 
-export const CONDITION_DICTIONARY_VERSION = '0.2.0';
+export const CONDITION_DICTIONARY_VERSION = '0.2.1';
+export const CONDITION_ANSWER_TYPES = [
+  'text',
+  'boolean',
+  'single_choice',
+  'multi_select',
+  'date',
+  'integer',
+  'number',
+  'duration',
+  'amount',
+  'range',
+  'url',
+];
 
 const atomicLegacyIds = new Set([
   'daily_time',
@@ -224,7 +237,7 @@ export const conditions = [
     '准备与适应',
     '笔试、面试或材料考核',
     '目标专业需要哪些考核形式？',
-    { ...guarded, answer_type: 'multi_choice' },
+    { ...guarded, answer_type: 'multi_select' },
     ['MP1', 'MP2'],
   ),
   condition(

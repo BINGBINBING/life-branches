@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   activeConditions,
+  CONDITION_ANSWER_TYPES,
   conditions,
   discoverySources,
   dictionaryIndex,
@@ -59,7 +60,18 @@ test('route and sector selection keeps unrelated questions out', () => {
 
 test('dictionary exposes explicit multi-select and amount field types', () => {
   assert.equal(dictionaryIndex.get('employment_type').policy.answer_type, 'multi_select');
+  assert.equal(dictionaryIndex.get('assessment_format').policy.answer_type, 'multi_select');
   assert.equal(dictionaryIndex.get('training_cost_ceiling').policy.answer_type, 'amount');
+});
+
+test('every dictionary answer type belongs to the frontend control contract', () => {
+  const supported = new Set(CONDITION_ANSWER_TYPES);
+  for (const item of conditions)
+    assert.ok(
+      supported.has(item.policy.answer_type || 'text'),
+      `${item.id}: ${item.policy.answer_type}`,
+    );
+  assert.ok(!conditions.some((item) => item.policy.answer_type === 'multi_choice'));
 });
 
 test('the intake catalogue covers every required control type', () => {

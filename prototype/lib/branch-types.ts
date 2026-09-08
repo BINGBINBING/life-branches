@@ -14,7 +14,18 @@ export type IntakeField = {
   id: string;
   label: string;
   question: string;
-  answerType: string;
+  answerType:
+    | 'text'
+    | 'boolean'
+    | 'single_choice'
+    | 'multi_select'
+    | 'date'
+    | 'integer'
+    | 'number'
+    | 'duration'
+    | 'amount'
+    | 'range'
+    | 'url';
   group: string;
   initialValue?: string;
   initialQuote?: string;
