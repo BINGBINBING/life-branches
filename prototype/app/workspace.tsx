@@ -717,7 +717,14 @@ function IntakeFields({
         <label className="field-label" key={field.id}>
           <span>
             {field.label}
-            <small className="meta">{field.group}</small>
+            <small className="meta">
+              {({
+                通用原子条件: '时间与现实条件',
+                学业路径原子条件: '学业背景与申请条件',
+                职业路径原子条件: '职业背景与转行条件',
+                岗位专项条件: '目标岗位要求',
+              } as Record<string, string>)[field.group] || field.group}
+            </small>
             <small
               className={`intake-field-status ${
                 field.initialValue ? 'recognized' : 'unanswered'
