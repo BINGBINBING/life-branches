@@ -70,6 +70,9 @@ export type OfficialCheck = {
   userValue: string;
   quote: string;
   sourceId: string;
+  policyStatus?: 'current' | 'expired' | 'unknown' | 'different_year';
+  policyYears?: string[];
+  applicableYear?: string;
 };
 export type Fact = { text: string; quote: string };
 export type ConditionComparison = {
@@ -170,6 +173,7 @@ export type Job = {
     eligibilityStatus?: 'unknown' | 'official_rules_found';
     eligibilityMessage?: string;
     basis?: 'official_only';
+    applicableYear?: string;
     checks: OfficialCheck[];
     estimates?: { id: string; label: string; value: string; basis: string }[];
     missing: { id: string; label: string; group: 'eligibility' | 'cost' }[];

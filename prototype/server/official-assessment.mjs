@@ -10,6 +10,25 @@ function numberAnswer(value) {
   return match ? Number(match[0]) : null;
 }
 
+function sourceYears(source) {
+  return [
+    ...new Set([
+      ...(Array.isArray(source?.years) ? source.years : []),
+      ...(String(source?.text || '').match(/20\d{2}/g) || []),
+    ]),
+  ]
+    .map(Number)
+    .filter((value) => Number.isInteger(value));
+}
+
+function policyTiming(source, applicableYear) {
+  const years = sourceYears(source);
+  if (!years.length) return { status: 'unknown', years };
+  if (years.includes(applicableYear)) return { status: 'current', years };
+  if (Math.max(...years) < applicableYear) return { status: 'expired', years };
+  return { status: 'different_year', years };
+}
+
 const rules = [
   {
     id: 'application_deadline',
@@ -141,9 +160,20 @@ const rules = [
 
 export function buildOfficialAssessment(officialSources, profile, options = {}) {
   const now = options.now || new Date();
+  const configuredYear = numberAnswer(profile.conditionAnswers?.policy_year);
+  const applicableYear = configuredYear || now.getFullYear();
   const checks = [];
   const seen = new Set();
-  for (const source of officialSources || []) {
+  const timedSources = (officialSources || [])
+    .map((source) => ({
+      source,
+      timing: policyTiming(source, applicableYear),
+    }))
+    .sort((a, b) => {
+      const priority = { current: 0, different_year: 1, expired: 2, unknown: 3 };
+      return priority[a.timing.status] - priority[b.timing.status];
+    });
+  for (const { source, timing } of timedSources) {
     for (const quote of clauses(source.text)) {
       for (const rule of rules) {
         if (seen.has(rule.id)) continue;
@@ -151,13 +181,20 @@ export function buildOfficialAssessment(officialSources, profile, options = {}) 
         if (!match) continue;
         const officialValue = rule.official(match);
         const userValue = profile.conditionAnswers?.[rule.id] || '';
+        const assessedStatus = rule.assess
+          ? rule.assess(officialValue, userValue, now)
+          : 'confirmed';
         checks.push({
           id: rule.id,
           label: rule.label,
           group: rule.group,
-          status: rule.assess
-            ? rule.assess(officialValue, userValue, now)
-            : 'confirmed',
+          status:
+            rule.group === 'eligibility' && timing.status !== 'current'
+              ? 'unknown'
+              : assessedStatus,
+          policyStatus: timing.status,
+          policyYears: timing.years.map(String),
+          applicableYear: String(applicableYear),
           officialValue,
           userValue,
           quote,
@@ -169,7 +206,8 @@ export function buildOfficialAssessment(officialSources, profile, options = {}) 
   }
   const hasOfficialRules = Boolean(officialSources?.length);
   const hasEligibilityRules = checks.some(
-    (item) => item.group === 'eligibility',
+    (item) =>
+      item.group === 'eligibility' && item.policyStatus === 'current',
   );
   return {
     eligibilityStatus:
@@ -180,8 +218,9 @@ export function buildOfficialAssessment(officialSources, profile, options = {}) 
       ? '资格未知：未提供或未成功读取目标学校官方规则，知乎个人经验不代替资格判断。'
       : hasEligibilityRules
         ? '已读取官方材料并分离核对其中可识别的资格条件。'
-        : '资格未知：已读取的官方材料中未识别出可用的资格规则。',
+        : `资格未知：已读取的官方材料未识别出 ${applicableYear} 年可用的资格规则，旧年或无年份材料仅作参考。`,
     basis: 'official_only',
+    applicableYear: String(applicableYear),
     checks,
     estimates: [],
     missing: rules

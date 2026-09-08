@@ -16,6 +16,7 @@ test('official eligibility is compared only with same-field user values', () => 
     [
       {
         id: 'O1',
+        years: ['2026'],
         text: '申请人绩点不低于3.5。申请人不得有挂科。接收名额20人。考核采用笔试和面试。',
       },
     ],
@@ -81,6 +82,7 @@ test('non-numeric application and study costs remain confirmed facts', () => {
     [
       {
         id: 'O2',
+        years: ['2026'],
         text: '第三学期开学后第一周内提出转专业申请。学生从转入的学年起按转入专业学费标准缴纳学费。转入专业没有学习过的课程必须补修。',
       },
     ],
@@ -97,4 +99,38 @@ test('non-numeric application and study costs remain confirmed facts', () => {
   assert.ok(result.missing.some((item) => item.id === 'makeup_credits'));
   assert.ok(result.missing.some((item) => item.id === 'extra_tuition'));
   assert.deepEqual(result.estimates, []);
+});
+
+test('expired policy cannot support current eligibility', () => {
+  const result = buildOfficialAssessment(
+    [
+      {
+        id: 'O-old',
+        years: ['2024'],
+        text: '申请人绩点不低于3.0。',
+      },
+    ],
+    { conditionAnswers: { gpa_value: '3.5', policy_year: '2026' } },
+    { now: new Date('2026-09-09T12:00:00+08:00') },
+  );
+  assert.equal(result.eligibilityStatus, 'unknown');
+  assert.equal(result.checks[0].status, 'unknown');
+  assert.equal(result.checks[0].policyStatus, 'expired');
+  assert.deepEqual(result.checks[0].policyYears, ['2024']);
+  assert.equal(result.checks[0].applicableYear, '2026');
+});
+
+test('current policy wins when an older source contains the same rule', () => {
+  const result = buildOfficialAssessment(
+    [
+      { id: 'O-old', years: ['2024'], text: '申请人绩点不低于3.0。' },
+      { id: 'O-new', years: ['2026'], text: '申请人绩点不低于3.8。' },
+    ],
+    { conditionAnswers: { gpa_value: '3.5', policy_year: '2026' } },
+    { now: new Date('2026-09-09T12:00:00+08:00') },
+  );
+  assert.equal(result.eligibilityStatus, 'official_rules_found');
+  assert.equal(result.checks[0].sourceId, 'O-new');
+  assert.equal(result.checks[0].status, 'not_satisfied');
+  assert.equal(result.checks[0].policyStatus, 'current');
 });

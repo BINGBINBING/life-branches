@@ -2386,6 +2386,21 @@ export default function Workspace() {
                                   </span>
                                 </div>
                                 <p>官方信息：{item.officialValue}</p>
+                                <p className="meta">
+                                  政策年份：
+                                  {item.policyYears?.length
+                                    ? item.policyYears.join('、')
+                                    : '未识别'}
+                                  {' · '}本次核对年份：
+                                  {item.applicableYear || '未设定'}
+                                  {item.policyStatus === 'expired'
+                                    ? ' · 材料已过期，不支持当前资格判断'
+                                    : item.policyStatus === 'unknown'
+                                      ? ' · 年份不明，仅作参考'
+                                      : item.policyStatus === 'different_year'
+                                        ? ' · 与本次核对年份不同'
+                                        : ''}
+                                </p>
                                 {item.userValue && (
                                   <p>你的条件：{item.userValue}</p>
                                 )}
