@@ -313,10 +313,10 @@ export function validProfile(input) {
     result[key] = input[key]?.trim() || '';
   }
   result.conditionAnswers = {};
-  for (const [id, answer] of Object.entries(input.conditionAnswers || {}).slice(
-    0,
-    12,
-  )) {
+  const conditionAnswers = input.conditionAnswers ?? {};
+  if (typeof conditionAnswers !== 'object' || Array.isArray(conditionAnswers))
+    throw new Error('条件表单内容无效。');
+  for (const [id, answer] of Object.entries(conditionAnswers)) {
     if (
       !dictionaryIndex.has(id) ||
       typeof answer !== 'string' ||

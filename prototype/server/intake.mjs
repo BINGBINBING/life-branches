@@ -189,7 +189,7 @@ function extractedPrefills(question, raw, candidates) {
   const allowed = new Set(candidates.map((item) => item.id));
   const values = new Map();
   const extracted = Array.isArray(raw.extracted) ? raw.extracted : [];
-  for (const item of extracted.slice(0, 12)) {
+  for (const item of extracted) {
     const id = typeof item?.conditionId === 'string' ? item.conditionId : '';
     const value = typeof item?.value === 'string' ? item.value.trim() : '';
     const quote = typeof item?.quote === 'string' ? item.quote.trim() : '';

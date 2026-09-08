@@ -335,3 +335,15 @@ test('explicit personal education and separate academic facts remain prefilled',
   });
   assert.equal(career.fields.find((field) => field.id === 'current_education')?.initialValue, '本科');
 });
+
+test('rejected AI candidates do not hide a valid fact after position twelve', () => {
+  const plan = normalizeIntake('我在职，本科毕业，想转行做开发', {
+    extracted: [
+      ...Array.from({ length: 12 }, () => ({
+        conditionId: 'current_job_function', value: '在职', quote: '我在职',
+      })),
+      { conditionId: 'target_job_function', value: '开发', quote: '想转行做开发' },
+    ],
+  });
+  assert.equal(plan.fields.find((field) => field.id === 'target_job_function')?.initialValue, '开发');
+});

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { dictionaryIndex } from './condition-dictionary.mjs';
 import {
   aggregate,
   analyze,
@@ -9,6 +10,27 @@ import {
 } from './engine.mjs';
 
 const profile = validProfile({ question: '在职转行开发', time: '每天两小时' });
+
+test('profile preserves all dictionary answers and validates entries after twelve', () => {
+  const conditionAnswers = Object.fromEntries(
+    [...dictionaryIndex.values()]
+      .filter((item) => item.nodeType === 'atomic')
+      .slice(0, 15)
+      .map((item) => [item.id, '用户已确认的条件']),
+  );
+  assert.equal(Object.keys(conditionAnswers).length, 15);
+  assert.deepEqual(validProfile({ question: '想转行做开发', conditionAnswers }).conditionAnswers, conditionAnswers);
+  assert.throws(() => validProfile({
+    question: '想转行做开发', conditionAnswers: { ...conditionAnswers, invented: '非法字段' },
+  }), /条件表单内容无效/);
+  const lastId = Object.keys(conditionAnswers).at(-1);
+  assert.throws(() => validProfile({
+    question: '想转行做开发', conditionAnswers: { ...conditionAnswers, [lastId]: 42 },
+  }), /条件表单内容无效/);
+  for (const malformed of [[], 'invalid', 42]) {
+    assert.throws(() => validProfile({ question: '想转行做开发', conditionAnswers: malformed }), /条件表单内容无效/);
+  }
+});
 const sources = [
   {
     id: 'S1',
