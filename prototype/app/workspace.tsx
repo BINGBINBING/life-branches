@@ -1505,8 +1505,12 @@ export default function Workspace() {
                   <label className="sr-only" htmlFor="starter-message">
                     描述你正在考虑的选择
                   </label>
+                  <p className="meta" id="data-use-notice">
+                    发送后，你的描述会交给 DeepSeek 生成条件表单。确认表单后，描述和部分条件会用于知乎检索，完整条件与检索片段会交给 DeepSeek 分析。
+                  </p>
                   <textarea
                     id="starter-message"
+                    aria-describedby="data-use-notice"
                     required
                     minLength={2}
                     maxLength={240}
@@ -1533,6 +1537,15 @@ export default function Workspace() {
                     </button>
                   </div>
                 </form>
+                <details className="quote-details">
+                  <summary>数据保存范围 <ChevronDown size={13} /></summary>
+                  <p className="meta">
+                    完成的探索会自动保存在当前浏览器，最多 20 条；点击“保存记录”会在本服务保存研究版本，最多 60 条，可从记录入口删除。当前服务的研究记录尚未按访问者隔离。
+                  </p>
+                  <p className="meta">
+                    搜索查询及返回片段会在服务端缓存复用 24 小时。当前用量日志仍保存问题前 120 字，提交反馈时也会保存问题概要；这些日志不会随研究记录删除。外部服务还会按各自的数据政策处理收到的内容。
+                  </p>
+                </details>
               </section>
               {availability?.archive && (
                 <button
