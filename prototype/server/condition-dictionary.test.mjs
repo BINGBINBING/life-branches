@@ -74,6 +74,31 @@ test('every dictionary answer type belongs to the frontend control contract', ()
   assert.ok(!conditions.some((item) => item.policy.answer_type === 'multi_choice'));
 });
 
+test('single and multi choice conditions expose semantic option arrays', () => {
+  const choiceFields = conditions.filter((item) =>
+    ['single_choice', 'multi_select'].includes(item.policy.answer_type),
+  );
+  assert.ok(choiceFields.length > 0);
+  for (const item of choiceFields) {
+    assert.ok(item.policy.options?.length >= 2, item.id);
+    assert.equal(
+      new Set(item.policy.options.map((option) => option.value)).size,
+      item.policy.options.length,
+      item.id,
+    );
+    assert.ok(
+      item.policy.options.every((option) => option.value && option.label),
+      item.id,
+    );
+  }
+  assert.equal(
+    dictionaryIndex
+      .get('income_continuity')
+      .policy.options.find((option) => option.value === '是').label,
+    '需要保持稳定收入',
+  );
+});
+
 test('the intake catalogue covers every required control type', () => {
   const types = new Set(
     conditions

@@ -26,6 +26,7 @@ export type IntakeField = {
     | 'amount'
     | 'range'
     | 'url';
+  options?: { value: string; label: string }[];
   group: string;
   initialValue?: string;
   initialQuote?: string;

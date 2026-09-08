@@ -86,6 +86,18 @@ test('selected fields are filtered by route and sector', () => {
   assert.ok(!plan.fields.some((field) => field.id === 'sales_payment_terms'));
 });
 
+test('intake fields carry dictionary choice labels to the frontend', () => {
+  const plan = normalizeIntake('我想转行做开发', {
+    scope: 'career_transition',
+    path: 'career_change',
+    sector: 'software',
+    fieldIds: ['income_continuity'],
+  });
+  const field = plan.fields.find((item) => item.id === 'income_continuity');
+  assert.equal(field.answerType, 'single_choice');
+  assert.ok(field.options.some((option) => option.label === '需要保持稳定收入'));
+});
+
 test('target sector wins over the current job named earlier in the question', () => {
   const plan = normalizeIntake('从运营转行做前端开发', {
     scope: 'career_transition',

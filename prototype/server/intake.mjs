@@ -271,6 +271,7 @@ export function normalizeIntake(question, raw = {}) {
       label: item.label,
       question: item.question,
       answerType: item.policy.answer_type || 'text',
+      options: item.policy.options || [],
       group: item.group,
       ...extracted.get(item.id),
       ...prefill(question, item.id),

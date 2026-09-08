@@ -5,7 +5,7 @@ import {
   expansionSources,
 } from './condition-expansion.mjs';
 
-export const CONDITION_DICTIONARY_VERSION = '0.2.1';
+export const CONDITION_DICTIONARY_VERSION = '0.3.0';
 export const CONDITION_ANSWER_TYPES = [
   'text',
   'boolean',
@@ -19,6 +19,61 @@ export const CONDITION_ANSWER_TYPES = [
   'range',
   'url',
 ];
+const choices = (...items) =>
+  items.map((item) =>
+    Array.isArray(item)
+      ? { value: item[0], label: item[1] }
+      : { value: item, label: item },
+  );
+export const CONDITION_OPTIONS = {
+  current_stage: choices(
+    '大一',
+    '大二',
+    '大三',
+    '大四',
+    '大五',
+    '研究生',
+    '尚未入学',
+    '其他',
+  ),
+  policy_verified: choices(
+    ['是', '已找到并核对本年度通知'],
+    ['部分核对', '已找到，但尚未完整核对'],
+    ['否', '尚未找到本年度通知'],
+  ),
+  gpa_or_rank: choices(
+    '绩点',
+    '专业排名',
+    '绩点和排名都要求',
+    '尚未核实',
+  ),
+  transfer_restriction: choices('允许', '部分允许', '不允许', '尚未核实'),
+  assessment_format: choices('笔试', '面试', '材料审核', '作品集', '其他'),
+  portfolio_or_work_sample: choices(
+    ['是', '已有可展示作品或案例'],
+    ['正在准备', '正在准备，尚未完成'],
+    ['否', '暂时没有'],
+  ),
+  income_continuity: choices(
+    ['是', '需要保持稳定收入'],
+    ['可短期中断', '可接受短期收入中断'],
+    ['否', '可以接受收入中断'],
+  ),
+  job_market_check: choices(
+    ['是', '已查看并记录共性要求'],
+    ['查看过', '查看过，但尚未整理'],
+    ['否', '尚未查看'],
+  ),
+  entry_level_acceptance: choices('接受', '视情况', '不接受'),
+  employment_type: choices('全职', '兼职', '实习', '外包 / 自由职业'),
+  application_materials: choices(
+    '成绩单',
+    '个人陈述',
+    '推荐信',
+    '作品集',
+    '获奖证明',
+  ),
+};
 
 const atomicLegacyIds = new Set([
   'daily_time',
@@ -35,7 +90,10 @@ const condition = (id, scope, group, label, question, policy, evidence) => ({
   group,
   label,
   question,
-  policy,
+  policy: {
+    ...policy,
+    ...(CONDITION_OPTIONS[id] ? { options: CONDITION_OPTIONS[id] } : {}),
+  },
   nodeType: atomicLegacyIds.has(id) ? 'atomic' : 'legacy_dimension',
   origin: 'legacy_candidate',
   evidence: [],
@@ -131,7 +189,15 @@ const contextOnly = {
 };
 
 export const conditions = [
-  ...expandedConditions,
+  ...expandedConditions.map((item) => ({
+    ...item,
+    policy: {
+      ...item.policy,
+      ...(CONDITION_OPTIONS[item.id]
+        ? { options: CONDITION_OPTIONS[item.id] }
+        : {}),
+    },
+  })),
   condition(
     'daily_time',
     ['career_transition', 'major_transition'],

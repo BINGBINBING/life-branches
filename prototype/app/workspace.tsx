@@ -722,16 +722,6 @@ function IntakeFields({
       ...profile,
       conditionAnswers: { ...profile.conditionAnswers, [id]: value },
     });
-  const multiOptions: Record<string, string[]> = {
-    employment_type: ['全职', '兼职', '实习', '外包 / 自由职业'],
-    application_materials: [
-      '成绩单',
-      '个人陈述',
-      '推荐信',
-      '作品集',
-      '获奖证明',
-    ],
-  };
   const amountUnit = (id: string) =>
     id === 'salary_floor_amount' || id === 'monthly_essential_cost'
       ? '元/月'
@@ -773,31 +763,31 @@ function IntakeFields({
             </div>
           ) : field.answerType === 'multi_select' ? (
             <div className="multi-select-field">
-              {(multiOptions[field.id] || []).map((option) => {
+              {(field.options || []).map((option) => {
                 const values = (profile.conditionAnswers?.[field.id] || '')
                   .split('、')
                   .filter(Boolean);
                 return (
-                  <label key={option}>
+                  <label key={option.value}>
                     <input
                       type="checkbox"
-                      checked={values.includes(option)}
+                      checked={values.includes(option.value)}
                       onChange={(e) =>
                         update(
                           field.id,
                           (e.target.checked
-                            ? [...values, option]
-                            : values.filter((value) => value !== option)
+                            ? [...values, option.value]
+                            : values.filter((value) => value !== option.value)
                           ).join('、'),
                         )
                       }
                     />
-                    {option}
+                    {option.label}
                   </label>
                 );
               })}
             </div>
-          ) : ['boolean', 'single_choice'].includes(field.answerType) ? (
+          ) : field.answerType === 'boolean' ? (
             <select
               value={profile.conditionAnswers?.[field.id] || ''}
               onChange={(e) => update(field.id, e.target.value)}
@@ -806,6 +796,21 @@ function IntakeFields({
               <option value="是">是</option>
               <option value="否">否</option>
               <option value="尚未核实">尚未核实</option>
+            </select>
+          ) : field.answerType === 'single_choice' ? (
+            <select
+              value={profile.conditionAnswers?.[field.id] || ''}
+              onChange={(e) => update(field.id, e.target.value)}
+            >
+              <option value="">请选择</option>
+              {(field.options || []).map((option) => (
+                <option value={option.value} key={option.value}>
+                  {option.label}
+                </option>
+              ))}
+              {!field.options?.some(
+                (option) => option.value === '尚未核实',
+              ) && <option value="尚未核实">尚未核实</option>}
             </select>
           ) : field.answerType === 'amount' ? (
             <div className="amount-field">
