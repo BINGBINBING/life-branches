@@ -931,6 +931,7 @@ export default function Workspace() {
   const [availability, setAvailability] = useState<{
     quota: { APIID: string; RemainingQuota: number }[] | null;
     archive: boolean;
+    developerTools: boolean;
   } | null>(null);
   const [showKeys, setShowKeys] = useState(false);
   const [zhihuKeyDraft, setZhihuKeyDraft] = useState('');
@@ -952,6 +953,7 @@ export default function Workspace() {
     request<{
       quota: { APIID: string; RemainingQuota: number }[] | null;
       archive: boolean;
+      developerTools: boolean;
     }>('/api/branches/health', { signal: ac.signal })
       .then(setAvailability)
       .catch(() => {});
@@ -1389,19 +1391,21 @@ export default function Workspace() {
             <span className="live-dot" />
             知乎公开内容
           </span>
-          <button
-            aria-haspopup="dialog"
-            aria-expanded={showKeys}
-            onClick={() => {
-              setShowKeys((v) => !v);
-              if (!showKeys) void refreshOverrides();
-            }}
-            title="开发期临时切换密钥"
-            className="key-toggle"
-          >
-            <SlidersHorizontal size={15} />
-            开发者密钥
-          </button>
+          {availability?.developerTools && (
+            <button
+              aria-haspopup="dialog"
+              aria-expanded={showKeys}
+              onClick={() => {
+                setShowKeys((v) => !v);
+                if (!showKeys) void refreshOverrides();
+              }}
+              title="开发期临时切换密钥"
+              className="key-toggle"
+            >
+              <SlidersHorizontal size={15} />
+              开发者密钥
+            </button>
+          )}
           {history.length > 0 && (
             <button
               aria-haspopup="dialog"
@@ -1431,7 +1435,7 @@ export default function Workspace() {
             </button>
           )}
         </div>
-        {showKeys && (
+        {availability?.developerTools && showKeys && (
           <section className="key-panel" aria-label="开发期临时密钥">
             <div className="key-panel-title">
               <strong>开发期临时密钥</strong>

@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { localApi, resolveAdminPassword } from './api.mjs';
+import {
+  developerToolsAllowed,
+  localApi,
+  resolveAdminPassword,
+} from './api.mjs';
 import { curatedArchive } from './archive-annotations.mjs';
 import {
   adaptiveFollowupQuery,
@@ -28,6 +32,7 @@ async function call(
   payload = {},
   origin = 'http://localhost:4317',
   targetHandler = handler,
+  host = 'localhost:4317',
 ) {
   let status;
   let value;
@@ -35,7 +40,7 @@ async function call(
     url,
     method,
     headers: {
-      host: 'localhost:4317',
+      host,
       origin,
       'content-type': 'application/json',
     },
@@ -111,6 +116,68 @@ test('production disables the admin endpoint when no password is configured', as
   );
   assert.equal(response.status, 503);
   assert.match(response.value.error, /管理功能未启用/);
+});
+test('developer key tools are local-only and disabled in production', async () => {
+  assert.equal(
+    developerToolsAllowed(
+      { headers: { host: '127.0.0.1:4317' } },
+      { NODE_ENV: 'development' },
+    ),
+    true,
+  );
+  assert.equal(
+    developerToolsAllowed(
+      { headers: { host: 'public.example' } },
+      { NODE_ENV: 'development' },
+    ),
+    false,
+  );
+  assert.equal(
+    developerToolsAllowed(
+      { headers: { host: 'localhost:4317' } },
+      { NODE_ENV: 'production' },
+    ),
+    false,
+  );
+  const productionHandler = createHandler({ env: { NODE_ENV: 'production' } });
+  assert.equal(
+    (
+      await call(
+        '/api/branches/settings',
+        'GET',
+        {},
+        'http://localhost:4317',
+        productionHandler,
+      )
+    ).status,
+    404,
+  );
+  assert.equal(
+    (
+      await call(
+        '/api/branches/keys',
+        'POST',
+        { type: 'ai', value: 'secret' },
+        'http://localhost:4317',
+        productionHandler,
+      )
+    ).status,
+    404,
+  );
+  const developmentHandler = createHandler({ env: { NODE_ENV: 'development' } });
+  assert.equal(
+    (
+      await call(
+        '/api/branches/settings',
+        'GET',
+        {},
+        'https://demo.example',
+        developmentHandler,
+        'demo.example',
+      )
+    ).status,
+    404,
+  );
 });
 test('invalid choices do not start remote requests', async () => {
   assert.equal(

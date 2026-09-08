@@ -32,6 +32,16 @@ export function resolveAdminPassword(env = process.env) {
   return env.NODE_ENV === 'production' ? null : 'life-branches-dev';
 }
 
+export function developerToolsAllowed(req, env = process.env) {
+  if (env.NODE_ENV === 'production') return false;
+  try {
+    const hostname = new URL(`http://${req.headers.host}`).hostname;
+    return ['localhost', '127.0.0.1', '[::1]'].includes(hostname);
+  } catch {
+    return false;
+  }
+}
+
 function authAdmin(req, env = process.env) {
   const got = req.headers['x-admin-password'];
   if (typeof got !== 'string' || !got) return false;
@@ -109,6 +119,7 @@ export function localApi(options = {}) {
                   requiredQuotaIds(false).includes(q.APIID),
                 ) ?? null,
               archive,
+              developerTools: developerToolsAllowed(req, runtimeEnv),
             });
           }
           if (
@@ -227,12 +238,16 @@ export function localApi(options = {}) {
             req.method === 'GET' &&
             url.pathname === '/api/branches/settings'
           ) {
+            if (!developerToolsAllowed(req, runtimeEnv))
+              return send(res, 404, { error: '未找到请求。' });
             return send(res, 200, {
               provider: analysisProvider(),
               devOverride: summaryCredentialStatus(), // 脱敏；不返回完整 key
             });
           }
           if (req.method === 'POST' && url.pathname === '/api/branches/keys') {
+            if (!developerToolsAllowed(req, runtimeEnv))
+              return send(res, 404, { error: '未找到请求。' });
             try {
               const input = await body(req);
               // 仅开发期：type 取 zhihu|ai；value 为空则清除该项。
