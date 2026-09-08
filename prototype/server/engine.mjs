@@ -259,6 +259,9 @@ async function ask(prompt) {
 
 export function profileText(profile) {
   return [
+    profile.researchMode === 'general'
+      ? '研究模式：通用经验；必需条件不完整，不得输出针对用户的可行性或适配结论。'
+      : '研究模式：已具备个性化对照的必需条件。',
     profile.question,
     profile.background,
     profile.time,
@@ -271,6 +274,25 @@ export function profileText(profile) {
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+const requiredConditions = {
+  campus_transfer: ['institution_name', 'current_major', 'target_major'],
+  cross_major_graduate: ['current_major', 'target_major'],
+  minor: ['institution_name', 'current_major', 'target_major'],
+  second_bachelor: ['institution_name', 'current_major', 'target_major'],
+  career_change: ['current_job_function', 'target_job_function'],
+};
+
+export function researchReadiness(profile) {
+  const required = requiredConditions[profile.decisionPath] || [];
+  const missingRequired = required.filter(
+    (id) => !profile.conditionAnswers?.[id]?.trim(),
+  );
+  return {
+    researchMode: missingRequired.length ? 'general' : 'personalized',
+    missingRequired,
+  };
 }
 
 export function validProfile(input) {
@@ -316,6 +338,7 @@ export function validProfile(input) {
     typeof input.decisionSector === 'string'
       ? input.decisionSector.slice(0, 60)
       : '';
+  Object.assign(result, researchReadiness(result));
   result.answers = {};
   for (const [q, a] of Object.entries(input.answers || {}).slice(0, 12)) {
     if (typeof a !== 'string' || q.length > 200 || a.length > 400)
@@ -685,9 +708,18 @@ export function validateAnalysis(raw, sources, profile) {
       }
     }
   }
+  const decisionInsights = buildDecisionInsights(paths, insights).map((item) =>
+    profile.researchMode === 'general'
+      ? {
+          ...item,
+          applicability:
+            '必需条件尚未补齐，这只是通用经验，不用于判断你的可行性或适配性。',
+        }
+      : item,
+  );
   return {
     paths,
-    insights: buildDecisionInsights(paths, insights),
+    insights: decisionInsights,
     questions,
     rejected,
     rejectionReasons,
@@ -695,6 +727,8 @@ export function validateAnalysis(raw, sources, profile) {
       ? Number((citationPasses / citationAttempts).toFixed(4))
       : null,
     analyzedAt: Date.now(),
+    researchMode: profile.researchMode || 'general',
+    missingRequired: profile.missingRequired || [],
     ruleVersion: RULE_VERSION,
     decisionClassification:
       profile.decisionScope === 'career_transition'

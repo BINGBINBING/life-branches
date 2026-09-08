@@ -9,6 +9,7 @@ import { curatedArchive } from './archive-annotations.mjs';
 import {
   adaptiveFollowupQuery,
   expandedSearchTerms,
+  researchReadiness,
   searchQueries,
   validProfile,
 } from './engine.mjs';
@@ -317,6 +318,29 @@ test('healthy recall adds controlled expansion terms to the gap query', () => {
   assert.match(query, /作品 项目/);
   assert.match(query, /在职准备/);
   assert.match(query, /失败 被拒 后悔 复盘/);
+});
+
+test('missing core fields force general research mode', () => {
+  assert.deepEqual(
+    researchReadiness({
+      decisionPath: 'campus_transfer',
+      conditionAnswers: { institution_name: '示例大学' },
+    }),
+    {
+      researchMode: 'general',
+      missingRequired: ['current_major', 'target_major'],
+    },
+  );
+  assert.equal(
+    researchReadiness({
+      decisionPath: 'career_change',
+      conditionAnswers: {
+        current_job_function: '运营',
+        target_job_function: '前端',
+      },
+    }).researchMode,
+    'personalized',
+  );
 });
 
 test('profile only accepts condition dictionary ids', () => {

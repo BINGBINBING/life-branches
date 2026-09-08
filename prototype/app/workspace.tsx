@@ -1951,6 +1951,17 @@ export default function Workspace() {
             </section>
           ) : (
             <>
+              {job?.profile.researchMode === 'general' && (
+                <output className="error-banner">
+                  <CircleHelp size={20} />
+                  <div>
+                    <strong>当前为通用经验研究</strong>
+                    <p>
+                      学校、现专业/岗位或目标专业/岗位等必需条件尚未补齐；本页不给出针对你的可行性或适配结论。
+                    </p>
+                  </div>
+                </output>
+              )}
               {error && (
                 <div className="error-banner" role="alert">
                   <TriangleAlert size={20} />

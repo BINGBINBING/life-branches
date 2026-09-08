@@ -9,6 +9,8 @@ export type Profile = {
   decisionSector: string;
   answers: Record<string, string>;
   skipped: string[];
+  researchMode?: 'general' | 'personalized';
+  missingRequired?: string[];
 };
 export type IntakeField = {
   id: string;
@@ -137,6 +139,8 @@ export type Question = {
   options: string[];
 };
 export type Analysis = {
+  researchMode?: 'general' | 'personalized';
+  missingRequired?: string[];
   paths: Path[];
   insights: Insight[];
   questions: Question[];
