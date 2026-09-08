@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { localApi } from './api.mjs';
+import { localApi, resolveAdminPassword } from './api.mjs';
 import { curatedArchive } from './archive-annotations.mjs';
 import {
   adaptiveFollowupQuery,
@@ -9,19 +9,25 @@ import {
   validProfile,
 } from './engine.mjs';
 
-let handler;
-localApi().configureServer({
-  middlewares: {
-    use(fn) {
-      handler = fn;
+function createHandler(options = {}) {
+  let configured;
+  localApi(options).configureServer({
+    middlewares: {
+      use(fn) {
+        configured = fn;
+      },
     },
-  },
-});
+  });
+  return configured;
+}
+
+const handler = createHandler();
 async function call(
   url,
   method = 'POST',
   payload = {},
   origin = 'http://localhost:4317',
+  targetHandler = handler,
 ) {
   let status;
   let value;
@@ -45,7 +51,7 @@ async function call(
       value = JSON.parse(text);
     },
   };
-  await handler(req, res, () => {});
+  await targetHandler(req, res, () => {});
   return { status, value };
 }
 test('historical archive keeps three validated cases and is explicitly curated', () => {
@@ -79,6 +85,32 @@ test('cross-origin mutations are rejected', async () => {
       .status,
     403,
   );
+});
+test('production never falls back to the development admin password', () => {
+  assert.equal(resolveAdminPassword({ NODE_ENV: 'production' }), null);
+  assert.equal(
+    resolveAdminPassword({
+      NODE_ENV: 'production',
+      ADMIN_PASSWORD: 'configured-secret',
+    }),
+    'configured-secret',
+  );
+  assert.equal(
+    resolveAdminPassword({ NODE_ENV: 'development' }),
+    'life-branches-dev',
+  );
+});
+test('production disables the admin endpoint when no password is configured', async () => {
+  const productionHandler = createHandler({ env: { NODE_ENV: 'production' } });
+  const response = await call(
+    '/api/branches/admin/summary',
+    'GET',
+    {},
+    'http://localhost:4317',
+    productionHandler,
+  );
+  assert.equal(response.status, 503);
+  assert.match(response.value.error, /管理功能未启用/);
 });
 test('invalid choices do not start remote requests', async () => {
   assert.equal(

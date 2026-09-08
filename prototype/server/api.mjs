@@ -26,15 +26,17 @@ let intakeActive = 0;
 let quota = null;
 let quotaAt = 0;
 
-// 管理后台密码：优先取环境变量；未配置时使用仅供本地开发的默认值（上云前必须设置 ADMIN_PASSWORD）。
-function adminPassword() {
-  return process.env.ADMIN_PASSWORD || 'life-branches-dev';
+export function resolveAdminPassword(env = process.env) {
+  const configured = env.ADMIN_PASSWORD?.trim();
+  if (configured) return configured;
+  return env.NODE_ENV === 'production' ? null : 'life-branches-dev';
 }
 
-function authAdmin(req) {
+function authAdmin(req, env = process.env) {
   const got = req.headers['x-admin-password'];
   if (typeof got !== 'string' || !got) return false;
-  const want = adminPassword();
+  const want = resolveAdminPassword(env);
+  if (!want) return false;
   if (got.length !== want.length) return false;
   return timingSafeEqual(Buffer.from(got), Buffer.from(want));
 }
@@ -77,6 +79,7 @@ async function body(req) {
 export function localApi(options = {}) {
   const researchStore = createResearchStore(options.researchStorePath);
   const telemetry = createTelemetry(options.telemetryPath);
+  const runtimeEnv = options.env || process.env;
   return {
     name: 'life-branches-local-api',
     configureServer(server) {
@@ -283,7 +286,12 @@ export function localApi(options = {}) {
             req.method === 'GET' &&
             url.pathname === '/api/branches/admin/summary'
           ) {
-            if (!authAdmin(req))
+            if (!resolveAdminPassword(runtimeEnv))
+              return send(res, 503, {
+                error:
+                  '管理功能未启用：生产环境必须配置 ADMIN_PASSWORD。',
+              });
+            if (!authAdmin(req, runtimeEnv))
               return send(res, 401, { error: '管理密码错误或未登录。' });
             await ensureQuota();
             const feedback = await listFeedback();
@@ -317,8 +325,8 @@ export function localApi(options = {}) {
               serverTime: new Date().toISOString(),
               today,
               adminPasswordRequired:
-                !process.env.ADMIN_PASSWORD &&
-                adminPassword() === 'life-branches-dev',
+                !runtimeEnv.ADMIN_PASSWORD &&
+                resolveAdminPassword(runtimeEnv) === 'life-branches-dev',
               zhihuQuota: quota ?? null,
               usage: {
                 total: usage.length,
