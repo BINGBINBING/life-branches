@@ -212,9 +212,9 @@ function ExperienceCard({
                 <strong>{condition.label}</strong>
                 <span className={`condition-status ${condition.status}`}>
                   {condition.status === 'different'
-                    ? '数值不同'
+                    ? '条件不同'
                     : condition.status === 'similar'
-                      ? '数值相同'
+                      ? '条件相同'
                       : '尚不可比'}
                 </span>
               </div>

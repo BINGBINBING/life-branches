@@ -46,6 +46,22 @@ const chinese = {
 };
 const number = (value) => chinese[value] ?? Number(value);
 const token = '([0-9]+(?:\\.[0-9]+)?|[零一二两三四五六七八九十])';
+const conditionUnits = {
+  daily_time: 'hour_per_day',
+  weekly_hours: 'hour_per_week',
+  current_stage: 'academic_year',
+  current_term: 'semester',
+  gpa_value: 'gpa',
+  rank_percentile: 'rank_percent',
+  rank_position: 'rank_position',
+  failed_course_count: 'course_count',
+  makeup_credits: 'credit',
+  relevant_tenure: 'year',
+  application_count: 'application_count',
+  interview_count: 'interview_count',
+  income_gap_months: 'month',
+  application_deadline: 'date',
+};
 
 function exactNumber(text, pattern, unit, options = {}) {
   const match = String(text || '').match(pattern);
@@ -334,6 +350,61 @@ export function parseSourceCondition(id, text) {
   return parsers[id]?.(text, 'source') || null;
 }
 
+function typedValue(id, value) {
+  return value
+    ? {
+        ...value,
+        fieldId: id,
+        unit: conditionUnits[id] || 'category',
+        semanticType:
+          typeof value.normalized === 'number' ? 'number' : 'category',
+      }
+    : null;
+}
+
+function gpaScale(text, allowBare = false) {
+  const value = String(text || '');
+  const match = value.match(
+    /(?:\/\s*|(?:满分|分制)(?:是|为)?\s*)(4(?:\.0)?|5(?:\.0)?|100)(?:\s*分)?/,
+  );
+  if (match) return Number(match[1]);
+  if (!allowBare) return null;
+  const bare = value.match(/^\s*(4(?:\.0)?|5(?:\.0)?|100)\s*(?:分制|分)?\s*$/);
+  return bare ? Number(bare[1]) : null;
+}
+
+function rankPopulation(text) {
+  return String(text || '').match(/(班级|专业|年级)(?:排名|内)?/)?.[1] || '';
+}
+
+function compatibility(id, caseValue, userValue, quote, profile) {
+  if (
+    caseValue.fieldId !== userValue.fieldId ||
+    caseValue.unit !== userValue.unit ||
+    caseValue.semanticType !== userValue.semanticType
+  )
+    return { comparable: false, reason: '双方条件的字段、单位或语义类型不一致。' };
+  if (id === 'gpa_value') {
+    const caseScale = gpaScale(quote);
+    const userScale = gpaScale(profile.conditionAnswers?.gpa_scale, true);
+    if (!caseScale || !userScale)
+      return { comparable: false, reason: '双方绩点分制未完整确认，不比较绩点高低。' };
+    if (caseScale !== userScale)
+      return { comparable: false, reason: '双方绩点分制不同，未经明确换算不直接比较。' };
+  }
+  if (id === 'rank_percentile' || id === 'rank_position') {
+    const casePopulation = rankPopulation(quote);
+    const userPopulation = rankPopulation(
+      profile.conditionAnswers?.rank_population,
+    );
+    if (!casePopulation || !userPopulation)
+      return { comparable: false, reason: '双方排名的比较群体未完整确认。' };
+    if (casePopulation !== userPopulation)
+      return { comparable: false, reason: '双方排名分属不同比较群体，不直接比较。' };
+  }
+  return { comparable: true, reason: '' };
+}
+
 function userAnswer(profile, id) {
   if (id === 'daily_time')
     return profile.conditionAnswers?.daily_time || profile.time || '';
@@ -374,13 +445,20 @@ export function compareConditionEvidence(source, raw, profile, validQuote) {
     const id = item?.conditionId;
     if (!allowed.has(id) || seen.has(id) || !parsers[id]) continue;
     const quote = validQuote(source, item.quote);
-    const caseValue = quote && parsers[id](quote, 'source');
+    const caseValue = typedValue(
+      id,
+      quote && parsers[id](quote, 'source'),
+    );
     if (!caseValue) continue;
     const answer = userAnswer(profile, id);
-    const userValue = answer && parsers[id](answer, 'user');
+    const userValue = typedValue(id, answer && parsers[id](answer, 'user'));
+    const compatible =
+      userValue && compatibility(id, caseValue, userValue, quote, profile);
     const status = !userValue
       ? 'unknown'
-      : userValue.normalized === caseValue.normalized
+      : !compatible.comparable
+        ? 'unknown'
+        : userValue.normalized === caseValue.normalized
         ? 'similar'
         : 'different';
     result.push({
@@ -392,12 +470,19 @@ export function compareConditionEvidence(source, raw, profile, validQuote) {
       caseValue: caseValue.display,
       quote,
       needsUserInput: !answer,
+      comparisonBasis: {
+        fieldId: id,
+        unit: caseValue.unit,
+        semanticType: caseValue.semanticType,
+        compatible: Boolean(compatible?.comparable),
+      },
       text:
         status === 'similar'
           ? '这一项的可核对条件相同，不代表整体条件相同。'
           : status === 'different'
             ? '这一项的可核对条件不同，不能直接照搬案例周期或结果。'
-            : '案例已提供该条件，你尚未提供可按同一口径比较的信息。',
+            : compatible?.reason ||
+              '案例已提供该条件，你尚未提供可按同一口径比较的信息。',
     });
     seen.add(id);
     if (result.length === 9) break;

@@ -74,13 +74,14 @@ test('major policy and deadline require explicit source wording', () => {
 
 test('major conditions compare exact values and preserve source quotes', () => {
   const source = {
-    snippets: ['我当时是第4学期，绩点3.7，没有挂科，转入后待补12学分。'],
+    snippets: ['我当时是第4学期，绩点3.7/4.0，没有挂科，转入后待补12学分。'],
   };
   const profile = {
     decisionScope: 'major_transition',
     conditionAnswers: {
       current_term: '第4学期',
       gpa_value: '3.2',
+      gpa_scale: '4.0',
       failed_course_count: '0门',
       makeup_credits: '8学分',
     },
@@ -89,7 +90,7 @@ test('major conditions compare exact values and preserve source quotes', () => {
     source,
     [
       { conditionId: 'current_term', quote: '我当时是第4学期' },
-      { conditionId: 'gpa_value', quote: '绩点3.7' },
+      { conditionId: 'gpa_value', quote: '绩点3.7/4.0' },
       { conditionId: 'failed_course_count', quote: '没有挂科' },
       { conditionId: 'makeup_credits', quote: '转入后待补12学分' },
     ],
@@ -100,7 +101,7 @@ test('major conditions compare exact values and preserve source quotes', () => {
     result.map((item) => item.status),
     ['similar', 'different', 'similar', 'different'],
   );
-  assert.equal(result[1].quote, '绩点3.7');
+  assert.equal(result[1].quote, '绩点3.7/4.0');
   assert.equal(result[1].userQuote, '3.2');
 });
 
@@ -121,6 +122,7 @@ test('GPA, rank percentile, and rank position remain separate dimensions', () =>
         gpa_value: '4.0',
         rank_percentile: '前15%',
         rank_position: '第5名',
+        rank_population: '年级',
       },
     },
     validQuote,
@@ -129,10 +131,15 @@ test('GPA, rank percentile, and rank position remain separate dimensions', () =>
     result.map((item) => [item.conditionId, item.status]),
     [
       ['rank_percentile', 'similar'],
-      ['rank_position', 'different'],
+      ['rank_position', 'unknown'],
     ],
   );
   assert.ok(result.every((item) => item.conditionId !== 'gpa_value'));
+  const rankPosition = result.find(
+    (item) => item.conditionId === 'rank_position',
+  );
+  assert.equal(rankPosition.comparisonBasis.compatible, false);
+  assert.match(rankPosition.text, /不同比较群体/);
 });
 
 test('academic year and semester remain separate dimensions', () => {
@@ -172,14 +179,19 @@ test('academic year and semester remain separate dimensions', () => {
 
 test('a GPA and a rank percentile in the same source are compared independently', () => {
   const source = {
-    snippets: ['我的GPA是3.7，成绩排名前15%。'],
+    snippets: ['我的GPA是3.7/4.0，专业排名前15%。'],
   };
   const result = compareConditionEvidence(
     source,
     [],
     {
       decisionScope: 'major_transition',
-      conditionAnswers: { gpa_value: '3.7', rank_percentile: '前20%' },
+      conditionAnswers: {
+        gpa_value: '3.7',
+        gpa_scale: '4.0',
+        rank_percentile: '前20%',
+        rank_population: '专业',
+      },
     },
     validQuote,
   );
@@ -190,6 +202,22 @@ test('a GPA and a rank percentile in the same source are compared independently'
       ['rank_percentile', 'different'],
     ],
   );
+});
+
+test('GPA values with missing or different scales stay incomparable', () => {
+  const source = { snippets: ['我的绩点是3.8/5.0。'] };
+  const result = compareConditionEvidence(
+    source,
+    [{ conditionId: 'gpa_value', quote: '我的绩点是3.8/5.0' }],
+    {
+      decisionScope: 'major_transition',
+      conditionAnswers: { gpa_value: '3.8', gpa_scale: '4.0' },
+    },
+    validQuote,
+  );
+  assert.equal(result[0].status, 'unknown');
+  assert.equal(result[0].comparisonBasis.compatible, false);
+  assert.match(result[0].text, /分制不同/);
 });
 
 test('local discovery works when the model omits condition evidence', () => {
@@ -346,13 +374,14 @@ test('each core direction can produce at least six grounded field comparisons', 
       source: {
         title: '校内转专业经历',
         snippets: [
-          '我当时是第4学期，绩点3.7，没有挂科，转入后待补12学分。',
+          '我当时是第4学期，绩点3.7/4.0，没有挂科，转入后待补12学分。',
           '申请截止2026年9月20日，学校允许跨学院转专业，我已经核对学校官网通知。',
         ],
       },
       answers: {
         current_term: '第4学期',
         gpa_value: '3.2',
+        gpa_scale: '4.0',
         failed_course_count: '0门',
         makeup_credits: '8学分',
         application_deadline: '2026-09-20',
