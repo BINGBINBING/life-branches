@@ -222,5 +222,6 @@ test('malformed model output fails without fabricated fallback', () => {
   assert.deepEqual(parseModel('```json\n{"paths":[]}\n```'), { paths: [] });
 });
 test('input is bounded', () => {
-  assert.throws(() => validProfile({ question: 'a'.repeat(241) }));
+  assert.equal(validProfile({ question: 'a'.repeat(2000) }).question.length, 2000);
+  assert.throws(() => validProfile({ question: 'a'.repeat(2001) }));
 });

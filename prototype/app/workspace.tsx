@@ -1556,13 +1556,13 @@ export default function Workspace() {
                     aria-describedby="data-use-notice"
                     required
                     minLength={2}
-                    maxLength={240}
+                    maxLength={2000}
                     value={starterText}
                     placeholder="例如：我本科读市场营销，工作三年后想转行做产品经理。目前在职，每天能投入两小时，希望半年内完成转型。"
                     onChange={(e) => setStarterText(e.target.value)}
                   />
                   <div className="composer-footer">
-                    <span>{starterText.length}/240</span>
+                    <span>{starterText.length}/2000</span>
                     <button
                       className="primary"
                       disabled={busy || starterText.trim().length < 2}

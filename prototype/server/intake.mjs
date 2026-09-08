@@ -293,10 +293,10 @@ export async function createIntakePlan(question, options = {}) {
   if (
     typeof question !== 'string' ||
     question.trim().length < 2 ||
-    question.length > 240
+    question.length > 2000
   )
     throw new Error(
-      '\u8bf7\u586b\u5199 2–240 \u5b57\u7684\u4e00\u4e2a\u5177\u4f53\u9009\u62e9\u3002',
+      '\u8bf7\u586b\u5199 2–2000 \u5b57\u7684\u4e00\u4e2a\u5177\u4f53\u9009\u62e9\u3002',
     );
   const prompt = `\u4f60\u5728\u4e3a“\u8f6c\u4e13\u4e1a / \u8f6c\u884c”\u7ecf\u9a8c\u68c0\u7d22\u751f\u6210\u641c\u7d22\u524d\u6761\u4ef6\u8868\u5355\u3002
 \u7528\u6237\u539f\u8bdd\uff1a${JSON.stringify(question.trim())}

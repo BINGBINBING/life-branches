@@ -278,9 +278,9 @@ export function validProfile(input) {
     !input ||
     typeof input.question !== 'string' ||
     input.question.trim().length < 2 ||
-    input.question.length > 240
+    input.question.length > 2000
   )
-    throw new Error('请填写 2–240 字的一个具体选择。');
+    throw new Error('请填写 2–2000 字的一个具体选择。');
   const result = { question: input.question.trim() };
   for (const key of ['background', 'time', 'goal']) {
     if (
@@ -378,18 +378,25 @@ export function searchQueries(profile) {
         ];
   const formContext = Object.entries(profile.conditionAnswers || {})
     .filter(([id]) => hardConditionIds.includes(id))
-    .slice(0, 3)
+    .slice(0, 4)
     .map(([id, answer]) => {
       const item = dictionaryIndex.get(id);
-      return item ? `${item.label} ${answer}` : '';
+      const conciseAnswer = String(answer)
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 40);
+      return item && conciseAnswer ? `${item.label} ${conciseAnswer}` : '';
     })
     .filter(Boolean)
     .join(' ')
-    .slice(0, 140);
-  const stem = [profile.question, decisionPathTerm(profile), formContext]
+    .slice(0, 180);
+  const scopeTerm =
+    decisionPathTerm(profile) ||
+    (profile.decisionScope === 'major_transition' ? '转专业' : '转行业');
+  const stem = [scopeTerm, formContext]
     .filter(Boolean)
     .join(' ');
-  const base = `${profile.question} ${decisionPathTerm(profile)}`.trim();
+  const base = stem;
   const major = profile.decisionScope === 'major_transition';
   return [
     `${stem} 亲身经历 行动 结果`,
@@ -423,7 +430,8 @@ export function expandedSearchTerms(profile) {
 }
 
 export function adaptiveFollowupQuery(profile, sources) {
-  const base = `${profile.question} ${decisionPathTerm(profile)}`.trim();
+  const [focused] = searchQueries(profile);
+  const base = focused.replace(/\s+亲身经历\s+行动\s+结果$/, '').trim();
   if (sources.length < 3) return `${base} 经历 结果 复盘`;
   const targetIds =
     profile.decisionScope === 'major_transition'

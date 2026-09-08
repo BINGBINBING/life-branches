@@ -121,6 +121,26 @@ test('search separates a focused evidence query from a setback query', () => {
   assert.match(queries[4], /薪资 空窗/);
 });
 
+test('search queries exclude the full personal narrative and stay concise', () => {
+  const privateNarrative = '我还没有告诉家人这件事，担心他们反对。'.repeat(30);
+  const queries = searchQueries({
+    question: `我想从零售运营转行软件开发。${privateNarrative}`,
+    decisionScope: 'career_transition',
+    decisionPath: 'career_change',
+    conditionAnswers: {
+      current_industry: '零售',
+      current_job_function: '运营',
+      target_industry: '软件',
+      target_job_function: '开发',
+    },
+  });
+  assert.ok(queries.every((query) => query.length < 260));
+  assert.ok(queries.every((query) => !query.includes('没有告诉家人')));
+  assert.ok(queries.every((query) => !query.includes(privateNarrative)));
+  assert.match(queries[0], /零售/);
+  assert.match(queries[0], /开发/);
+});
+
 test('all four academic routes enter the focused search query', () => {
   const routes = {
     campus_transfer: '校内转专业',

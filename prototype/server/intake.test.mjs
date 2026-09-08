@@ -14,6 +14,22 @@ test('pre-search intake stays inside the supported decision scopes', () => {
   );
 });
 
+test('pre-search intake accepts a detailed description up to 2000 characters', async () => {
+  const question = `想转行做开发。${'补充背景。'.repeat(500)}`.slice(0, 2000);
+  const plan = await createIntakePlan(question, {
+    ask: async () => ({
+      scope: 'career_transition',
+      path: 'career_change',
+      sector: 'software',
+      fieldIds: ['target_job_function'],
+    }),
+  });
+  assert.equal(plan.supported, true);
+  await assert.rejects(() =>
+    createIntakePlan(`${question}超`, { ask: async () => ({}) }),
+  );
+});
+
 test('AI may select dictionary ids but cannot invent form fields', async () => {
   const plan = await createIntakePlan('非科班，在职，想转行做开发', {
     ask: async () => ({
