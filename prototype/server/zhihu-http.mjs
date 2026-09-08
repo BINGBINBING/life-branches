@@ -68,38 +68,3 @@ export async function queryQuota(opts = {}) {
   return { Code: 0, Message: 'success', Data: items };
 }
 
-/** 知乎直答（zhida）——chat.completions 结构。 */
-export async function chatCompletions({
-  model,
-  messages,
-  timeoutMs = 90000,
-  secret,
-} = {}) {
-  const m = resolveSecret({ secret });
-  const response = await fetch(`${API_BASE}/v1/chat/completions`, {
-    method: 'POST',
-    redirect: 'error',
-    headers: {
-      Authorization: `Bearer ${m}`,
-      'X-Request-Timestamp': String(Math.floor(Date.now() / 1000)),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ model, messages, stream: false }),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  const json = await response.json().catch(() => ({}));
-  if (!response.ok || (json && json.Code != null && json.Code !== 0)) {
-    if (response.status === 401 || json?.Code === 20001)
-      throw new Error('ZHIHU_AUTH');
-    if (response.status === 429 || json?.Code === 30001 || json?.Code === 30002)
-      throw new Error('ZHIHU_RATE');
-    if (!response.ok) throw new Error(`ZHIHU_HTTP_${response.status}`);
-    throw new Error('ZHIHU_UPSTREAM');
-  }
-  return json;
-}
-
-// 该 provider 是否可用（本地或云端都靠环境变量里的 Secret）。
-export function hasZhihuSecret() {
-  return Boolean(process.env.ZHIHU_ACCESS_SECRET);
-}

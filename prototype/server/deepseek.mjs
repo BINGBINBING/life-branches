@@ -7,18 +7,14 @@ try {
   if (error.code !== 'ENOENT') throw new Error('本地分析配置无法读取。');
 }
 
+// 知乎直答（zhida）已弃用：分析统一由 DeepSeek 完成（默认 deepseek-v4-flash）。
 export function analysisProvider() {
-  const provider = process.env.ANALYSIS_PROVIDER || 'zhihu';
-  if (!['zhihu', 'deepseek'].includes(provider))
-    throw new Error('不支持的分析服务配置。');
-  return provider;
+  return 'deepseek';
 }
 
 export function requiredQuotaIds(reused) {
-  return [
-    ...(reused ? [] : ['zhihu_search']),
-    ...(analysisProvider() === 'zhihu' ? ['zhida_openai'] : []),
-  ];
+  // 分析不消耗知乎额度；复用来源重新分析时连搜索额度都不再需要。
+  return reused ? [] : ['zhihu_search'];
 }
 
 export async function deepseekJSON(prompt, options = {}) {

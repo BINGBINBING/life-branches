@@ -40,11 +40,11 @@ npm start
 
 ## 本地 DeepSeek 配置
 
-在本机 `prototype/.env.local` 设置 `ANALYSIS_PROVIDER=deepseek`、`DEEPSEEK_MODEL=deepseek-v4-flash` 和 `DEEPSEEK_API_KEY`。该文件被 Git 忽略，应限制为仅当前用户读写。不要使用 `VITE_` 或 `NEXT_PUBLIC_` 前缀存放密钥。
+在本机 `prototype/.env.local` 设置 `DEEPSEEK_API_KEY`(必需)与 `DEEPSEEK_MODEL`(可选,默认 `deepseek-v4-flash`)。该文件被 Git 忽略,应限制为仅当前用户读写。不要使用 `VITE_` 或 `NEXT_PUBLIC_` 前缀存放密钥。
 
-默认不配置时继续使用知乎直答；显式配置 `ANALYSIS_PROVIDER=zhihu` 可切回。服务不会在失败时自动切换供应商或重试收费调用。配置修改后须重启本地服务。
+分析已统一由 DeepSeek 完成,**知乎直答已弃用**——无需再配置 `ANALYSIS_PROVIDER`,知乎仅用于真实经历检索。服务不会在失败时自动切换供应商或重试收费调用。配置修改后须重启本地服务。
 
-DeepSeek 模式只检查所需的知乎搜索额度，复用来源重新分析不依赖知乎直答额度。请求固定发往官方 API，90 秒截止、最多 6000 输出 tokens；拒绝空内容、非 JSON、截断结果和无效引用。合法 JSON 与有效引用都不等于语义准确。
+分析只检查所需的知乎搜索额度,复用来源重新分析不依赖知乎额度。请求固定发往 DeepSeek 官方 API,90 秒截止、最多 6000 输出 tokens;拒绝空内容、非 JSON、截断结果和无效引用。合法 JSON 与有效引用都不等于语义准确。
 
 `node server/verify-deepseek.mjs` 使用既有公开片段和虚构用户做三次分析，不消耗知乎搜索额度，但会产生 DeepSeek 费用。结果只写入忽略的 `.local/deepseek-verification`。默认离线测试不调用外部模型。历史演示不会被测试结果自动替换。
 

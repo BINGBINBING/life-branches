@@ -3,7 +3,7 @@ import { promisify } from 'node:util';
 import { homedir, platform } from 'node:os';
 import { win32, posix } from 'node:path';
 import { existsSync } from 'node:fs';
-import { analysisProvider, deepseekJSON } from './deepseek.mjs';
+import { deepseekJSON } from './deepseek.mjs';
 import { dictionaryIndex } from './condition-dictionary.mjs';
 import {
   COMPARABLE_CONDITIONS,
@@ -36,7 +36,6 @@ import { getCachedSearch, putCachedSearch } from './storage.mjs';
 import {
   searchZhihu as httpSearchZhihu,
   queryQuota as httpQueryQuota,
-  chatCompletions as httpChatCompletions,
 } from './zhihu-http.mjs';
 
 const exec = promisify(execFile);
@@ -164,7 +163,7 @@ export async function zhihuBackendQuota() {
       throw new Error(zhihuErrorToMessage(e));
     }
   }
-  return cli(['quota', '--api-id', 'zhihu_search', '--api-id', 'zhida_openai']);
+  return cli(['quota', '--api-id', 'zhihu_search']);
 }
 
 let nextRequestAt = 0;
@@ -251,42 +250,11 @@ export function parseModel(text) {
 }
 
 async function ask(prompt) {
-  if (analysisProvider() === 'deepseek') {
-    return deepseekJSON(prompt, {
-      // 开发态若临时替换过 AI key，则优先使用它；否则回退到 env 中的 DEEPSEEK_API_KEY。
-      key: tempOverrides.aiKey || undefined,
-    });
-  }
-  if (zhihuHttpAvailable()) {
-    // 知乎直答走 HTTP（云端没有本地 CLI）。
-    let result;
-    try {
-      result = await httpChatCompletions({
-        model: 'zhida-fast-1p5',
-        messages: [{ role: 'user', content: prompt }],
-        secret: httpSecret(),
-      });
-    } catch (e) {
-      throw new Error(zhihuErrorToMessage(e));
-    }
-    return {
-      value: parseModel(result.choices?.[0]?.message?.content),
-      metadata: { provider: 'zhihu', model: 'zhida-fast-1p5' },
-    };
-  }
-  const result = await cli([
-    'answer',
-    '--query',
-    prompt,
-    '--model',
-    'zhida-fast-1p5',
-    '--timeout',
-    '150s',
-  ]);
-  return {
-    value: parseModel(result.choices?.[0]?.message?.content),
-    metadata: { provider: 'zhihu', model: 'zhida-fast-1p5' },
-  };
+  // 知乎直答已弃用：分析统一走 DeepSeek（deepseek-v4-flash）。
+  return deepseekJSON(prompt, {
+    // 开发态若临时替换过 AI key，则优先使用它；否则回退到 env 中的 DEEPSEEK_API_KEY。
+    key: tempOverrides.aiKey || undefined,
+  });
 }
 
 export function profileText(profile) {
