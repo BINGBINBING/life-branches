@@ -1576,6 +1576,7 @@ export default function Workspace() {
                       key={choice}
                       onClick={() => {
                         setStarterText(choice);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
                       }}
                       disabled={busy}
                     >
