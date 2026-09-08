@@ -2139,8 +2139,11 @@ export default function Workspace() {
                   <aside className="questions-sidebar">
                     <div className="sidebar-heading">
                       <CircleHelp size={18} />
-                      <h2>根据新经历补充条件</h2>
+                      <h2>回答新证据问题</h2>
                     </div>
+                    <p className="meta">
+                      针对当前来源逐项补充，只更新相关条件对照；不重新搜索，也不调用 DeepSeek。
+                    </p>
                     {questions.length ? (
                       <DynamicConditionForm
                         questions={questions}
@@ -2172,7 +2175,7 @@ export default function Workspace() {
                         <CheckCircle2 size={22} />
                         <p>目前没有新的关键补问。</p>
                         <span className="meta">
-                          这不代表信息已完整。想补充任何情况，可点下方「修改已填写条件」自由填写。
+                          这不代表信息已完整。想修改初始化条件或补充其他情况，可使用下方「编辑全部条件」。
                         </span>
                       </div>
                     )}
@@ -2181,8 +2184,11 @@ export default function Workspace() {
                       onClick={() => setEditing(true)}
                     >
                       <SlidersHorizontal size={16} />
-                      修改已填写条件
+                      编辑全部条件
                     </button>
+                    <p className="meta">
+                      用于修改初始化条件或自由补充；保存后复用现有来源并重新生成对照，不重新搜索，也不调用 DeepSeek。
+                    </p>
                     <FeedbackCard
                       jobId={job?.id ?? null}
                       question={profile.question}
