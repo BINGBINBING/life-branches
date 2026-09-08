@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { dictionaryIndex } from '../server/condition-dictionary.mjs';
 import {
   ArrowLeft,
   ArrowRight,
@@ -1718,13 +1719,15 @@ export default function Workspace() {
               {Object.entries(profile.answers).map(([q, a]) => (
                 <span key={q} title={q}>
                   <Check size={13} />
+                  <b>{q === FREE_NOTE_KEY ? '补充条件' : q}：</b>
                   {a}
                 </span>
               ))}
               {Object.entries(profile.conditionAnswers || {}).map(
                 ([id, answer]) => (
-                  <span key={id} title={id}>
+                  <span key={id}>
                     <Check size={13} />
+                    <b>{dictionaryIndex.get(id)?.label || '其他条件'}：</b>
                     {answer}
                   </span>
                 ),
