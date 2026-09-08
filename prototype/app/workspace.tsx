@@ -699,11 +699,16 @@ function IntakeFields({
   onChange: (value: Profile) => void;
 }) {
   const unitFor = (id: string) => {
-    if (id === 'relevant_tenure') return '年';
-    if (id === 'current_term') return '学期';
-    if (id.includes('month')) return '个月';
-    if (id.includes('hour') || id === 'daily_time') return '小时';
-    return '';
+    return ({
+      daily_time: '小时/天', weekly_hours: '小时/周', continuous_session: '小时/次',
+      preparation_months: '个月', enrollment_year: '年', policy_year: '年',
+      current_term: '学期', attempts_remaining: '次', gpa_value: '',
+      rank_percentile: '%', failed_course_count: '门', incoming_quota: '人',
+      recognized_credits: '学分', makeup_credits: '学分', graduation_delay: '个月',
+      extra_tuition: '元', relevant_tenure: '年', application_count: '份',
+      interview_count: '次', income_gap_months: '个月', commute_ceiling: '分钟/单程',
+      notice_period: '天',
+    } as Record<string, string>)[id];
   };
   const update = (id: string, value: string) =>
     onChange({
@@ -818,9 +823,10 @@ function IntakeFields({
               />
               <span>{amountUnit(field.id)}</span>
             </div>
-          ) : ['integer', 'number', 'duration', 'range'].includes(
+          ) : ['integer', 'number', 'duration'].includes(
               field.answerType,
-            ) ? (
+            ) && unitFor(field.id) !== undefined ? (
+            <div className="amount-field">
             <input
               type="number"
               min="0"
@@ -838,6 +844,23 @@ function IntakeFields({
                 )
               }
             />
+              <span>
+                {field.id === 'gpa_value'
+                  ? `绩点（${profile.conditionAnswers?.gpa_scale || '分制待确认'}）`
+                  : unitFor(field.id)}
+              </span>
+            </div>
+          ) : ['duration', 'range'].includes(field.answerType) ? (
+            <div>
+              <input
+                type="text"
+                value={profile.conditionAnswers?.[field.id] || ''}
+                maxLength={400}
+                placeholder={field.question}
+                onChange={(e) => update(field.id, e.target.value)}
+              />
+              <span className="meta">{unitFor(field.id) ? `单位：${unitFor(field.id)}，可填写区间` : '请注明频率、单位或范围'}</span>
+            </div>
           ) : field.id === 'job_posting_text' ? (
             <textarea
               value={profile.conditionAnswers?.[field.id] || ''}
