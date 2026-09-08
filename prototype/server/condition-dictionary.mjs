@@ -77,6 +77,7 @@ export const CONDITION_OPTIONS = {
 
 const atomicLegacyIds = new Set([
   'daily_time',
+  'current_stage',
   'policy_verified',
   'transfer_restriction',
   'portfolio_or_work_sample',

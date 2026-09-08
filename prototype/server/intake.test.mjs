@@ -139,6 +139,16 @@ test('target sector wins over the current job named earlier in the question', ()
   assert.ok(!plan.fields.some((field) => field.id === 'operations_metrics'));
 });
 
+test('academic year is prefilled without inventing a semester', () => {
+  const plan = normalizeIntake('我现在大一，想校内转专业', {
+    scope: 'major_transition',
+    path: 'campus_transfer',
+  });
+  const fields = new Map(plan.fields.map((field) => [field.id, field]));
+  assert.equal(fields.get('current_stage').initialValue, '大一');
+  assert.equal(fields.get('current_term')?.initialValue || '', '');
+});
+
 test('initial description only prefills locally validated values', () => {
   const plan = normalizeIntake(
     '我现在从机械专业转到计算机专业，每天可以投入2小时，绩点3.6',

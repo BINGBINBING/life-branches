@@ -5,6 +5,7 @@ export const COMPARABLE_CONDITIONS = Object.freeze({
   major_transition: [
     'daily_time',
     'weekly_hours',
+    'current_stage',
     'current_term',
     'gpa_value',
     'rank_percentile',
@@ -112,22 +113,26 @@ const parsers = {
       { max: 168 },
     );
   },
-  current_term(text, mode) {
+  current_stage(text) {
     const value = String(text || '');
-    const term = exactNumber(
-      value,
+    const year = value.match(new RegExp(`大\\s*${token}`));
+    const parsed = year && number(year[1]);
+    if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 8)
+      return categorical(`year-${parsed}`, year[0].replace(/\s+/g, ''));
+    if (/研究生/.test(value)) return categorical('graduate', '研究生');
+    if (/尚未入学|还没入学/.test(value))
+      return categorical('not-enrolled', '尚未入学');
+    return null;
+  },
+  current_term(text, mode) {
+    return exactNumber(
+      text,
       mode === 'source'
         ? new RegExp(`第\\s*${token}\\s*(?:个)?学期`)
         : new RegExp(`(?:第\\s*)?${token}\\s*(?:个)?学期`),
       '学期',
       { min: 1, max: 20 },
     );
-    if (term) return term;
-    const year = value.match(new RegExp(`大${token}`));
-    const parsed = year && number(year[1]);
-    return Number.isFinite(parsed) && parsed >= 1 && parsed <= 8
-      ? { normalized: `year-${parsed}`, display: `大${parsed}` }
-      : null;
   },
   gpa_value(text, mode) {
     const value = String(text || '');

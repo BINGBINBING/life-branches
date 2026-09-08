@@ -38,6 +38,7 @@ const priorities = {
     'current_major',
     'target_major',
     'policy_link',
+    'current_stage',
     'current_term',
     'policy_year',
     'application_deadline',
@@ -70,7 +71,7 @@ const priorities = {
 
 const comparisonAnchors = {
   career_transition: ['daily_time', 'relevant_tenure', 'current_education'],
-  campus_transfer: ['current_term', 'gpa_value'],
+  campus_transfer: ['current_stage', 'current_term', 'gpa_value'],
   cross_major_graduate: ['daily_time', 'weekly_hours'],
   minor: ['daily_time', 'weekly_hours'],
   second_bachelor: ['daily_time', 'weekly_hours'],
@@ -193,9 +194,14 @@ function prefill(question, id) {
     const parsed = quote && parseUserCondition(id, quote);
     return parsed ? { initialValue: parsed.display, initialQuote: quote } : {};
   }
+  if (id === 'current_stage') {
+    const quote = question.match(/(?:目前|现在)?大[一二两三四五六七八]/)?.[0];
+    const parsed = quote && parseUserCondition(id, quote);
+    return parsed ? { initialValue: parsed.display, initialQuote: quote } : {};
+  }
   if (id === 'current_term') {
     const quote = question.match(
-      /(?:目前|现在)?(?:大[一二两三四五六七八]|第\s*(?:\d+|[一二两三四五六七八九十])\s*(?:个)?学期)/,
+      /(?:目前|现在)?第\s*(?:\d+|[一二两三四五六七八九十])\s*(?:个)?学期/,
     )?.[0];
     const parsed = quote && parseUserCondition(id, quote);
     return parsed ? { initialValue: parsed.display, initialQuote: quote } : {};

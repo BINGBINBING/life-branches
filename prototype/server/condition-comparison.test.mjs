@@ -10,7 +10,7 @@ const validQuote = (source, quote) =>
   source.snippets.some((text) => text.includes(quote)) ? quote : '';
 
 test('each decision scope exposes numeric and categorical conditions', () => {
-  assert.equal(COMPARABLE_CONDITIONS.major_transition.length, 11);
+  assert.equal(COMPARABLE_CONDITIONS.major_transition.length, 12);
   assert.equal(COMPARABLE_CONDITIONS.career_transition.length, 10);
 });
 
@@ -133,6 +133,41 @@ test('GPA, rank percentile, and rank position remain separate dimensions', () =>
     ],
   );
   assert.ok(result.every((item) => item.conditionId !== 'gpa_value'));
+});
+
+test('academic year and semester remain separate dimensions', () => {
+  const yearSource = { snippets: ['我当时是大一，之后申请转专业。'] };
+  const yearResult = compareConditionEvidence(
+    yearSource,
+    [
+      { conditionId: 'current_stage', quote: '我当时是大一' },
+      { conditionId: 'current_term', quote: '我当时是大一' },
+    ],
+    {
+      decisionScope: 'major_transition',
+      conditionAnswers: { current_term: '第1学期' },
+    },
+    validQuote,
+  );
+  assert.deepEqual(
+    yearResult.map((item) => [item.conditionId, item.status]),
+    [['current_stage', 'unknown']],
+  );
+
+  const termSource = { snippets: ['我在第1学期申请转专业。'] };
+  const termResult = compareConditionEvidence(
+    termSource,
+    [{ conditionId: 'current_term', quote: '我在第1学期申请转专业' }],
+    {
+      decisionScope: 'major_transition',
+      conditionAnswers: { current_stage: '大一' },
+    },
+    validQuote,
+  );
+  assert.deepEqual(
+    termResult.map((item) => [item.conditionId, item.status]),
+    [['current_term', 'unknown']],
+  );
 });
 
 test('a GPA and a rank percentile in the same source are compared independently', () => {
