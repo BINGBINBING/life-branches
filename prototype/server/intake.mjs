@@ -1,6 +1,9 @@
 import { candidateConditions, conditions } from './condition-dictionary.mjs';
 import { deepseekJSON } from './deepseek.mjs';
-import { parseUserCondition } from './condition-comparison.mjs';
+import {
+  parseSourceCondition,
+  parseUserCondition,
+} from './condition-comparison.mjs';
 
 const scopes = ['major_transition', 'career_transition', 'unsupported'];
 const majorPaths = [
@@ -10,6 +13,7 @@ const majorPaths = [
   'second_bachelor',
 ];
 const decisionPaths = [...majorPaths, 'career_change'];
+const explicitDurationIds = new Set(['daily_time', 'weekly_hours']);
 const sectors = [
   'industrial',
   'design',
@@ -169,6 +173,16 @@ function extractedPrefills(question, raw, candidates) {
       !quote.toLowerCase().includes(value.toLowerCase())
     )
       continue;
+    if (explicitDurationIds.has(id)) {
+      const sourceValue = parseSourceCondition(id, quote);
+      const submittedValue = parseUserCondition(id, value);
+      if (
+        !sourceValue ||
+        !submittedValue ||
+        sourceValue.normalized !== submittedValue.normalized
+      )
+        continue;
+    }
     values.set(id, { initialValue: value, initialQuote: quote });
   }
   return values;

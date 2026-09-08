@@ -191,7 +191,7 @@ test('current education is not inferred from a target job requirement', () => {
 
 test('AI extraction prefills only dictionary conditions with exact user quotes', async () => {
   const question =
-    '我本科毕业，在运营岗工作三年，想转行做产品经理，每天能投入两小时';
+    '我本科毕业，在运营岗工作三年，想转行做产品经理，每天能投入2小时';
   const plan = await createIntakePlan(question, {
     ask: async () => ({
       value: {
@@ -223,7 +223,12 @@ test('AI extraction prefills only dictionary conditions with exact user quotes',
           {
             conditionId: 'weekly_hours',
             value: '14小时/周',
-            quote: '每天能投入两小时',
+            quote: '每天能投入2小时',
+          },
+          {
+            conditionId: 'weekly_hours',
+            value: '2小时',
+            quote: '每天能投入2小时',
           },
         ],
       },
@@ -236,4 +241,32 @@ test('AI extraction prefills only dictionary conditions with exact user quotes',
   assert.equal(fields.get('daily_time')?.initialValue, '2小时/天');
   assert.equal(fields.get('weekly_hours')?.initialValue, undefined);
   assert.ok(!fields.has('invented_condition'));
+});
+
+test('AI cannot write an explicit weekly duration into the daily field', async () => {
+  const plan = await createIntakePlan('我想转行，每周能投入14小时', {
+    ask: async () => ({
+      value: {
+        scope: 'career_transition',
+        path: 'career_change',
+        fieldIds: ['daily_time', 'weekly_hours'],
+        extracted: [
+          {
+            conditionId: 'daily_time',
+            value: '14小时',
+            quote: '每周能投入14小时',
+          },
+          {
+            conditionId: 'weekly_hours',
+            value: '14小时',
+            quote: '每周能投入14小时',
+          },
+        ],
+      },
+      metadata: { provider: 'mock' },
+    }),
+  });
+  const fields = new Map(plan.fields.map((field) => [field.id, field]));
+  assert.equal(fields.get('daily_time')?.initialValue, undefined);
+  assert.equal(fields.get('weekly_hours')?.initialValue, '14小时/周');
 });

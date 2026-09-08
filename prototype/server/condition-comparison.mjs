@@ -330,6 +330,10 @@ export function parseUserCondition(id, text) {
   return parsers[id]?.(text, 'user') || null;
 }
 
+export function parseSourceCondition(id, text) {
+  return parsers[id]?.(text, 'source') || null;
+}
+
 function userAnswer(profile, id) {
   if (id === 'daily_time')
     return profile.conditionAnswers?.daily_time || profile.time || '';
