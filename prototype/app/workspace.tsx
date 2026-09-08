@@ -180,8 +180,21 @@ function ExperienceCard({
           <Evidence value={item.action} />
         </div>
         <div>
-          <h4>结果相关原文 · 不代表目标达成</h4>
-          <Evidence value={item.outcome} />
+          <h4>{item.stage ? `已核对阶段：${item.stage.label}` : '结果仍待核实'}</h4>
+          {item.stage ? (
+            <>
+              <blockquote>{item.stage.quote}</blockquote>
+              <p className="meta">仅说明这一阶段，后续适应、毕业或就业情况需另行核对。</p>
+              {item.outcome && item.outcome.quote !== item.stage.quote && (
+                <details className="quote-details">
+                  <summary>其他结果片段 <ChevronDown size={13} /></summary>
+                  <blockquote>{item.outcome.quote}</blockquote>
+                </details>
+              )}
+            </>
+          ) : (
+            <Evidence value={item.outcome} />
+          )}
         </div>
       </div>
       {item.conditionComparisons?.length ? (
