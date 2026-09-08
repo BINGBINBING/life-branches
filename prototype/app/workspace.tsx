@@ -1887,6 +1887,8 @@ export default function Workspace() {
                         路径来自检索到的经历。
                         <br />
                         个人自述尚未经独立核实。
+                        <br />
+                        “阶段达成”仅统计本次入选经历中有阶段引文的案例，每段计一次，不代表整条路径成功率。
                       </p>
                     </div>
                   </aside>
@@ -2028,7 +2030,7 @@ export default function Workspace() {
                       <div className="cases-heading">
                         <h3>经验对照</h3>
                         <span className="meta">
-                          同一条路，条件与结果可能不同
+                          以下为当前路径的样本数量，每段经历计一次，不能用于推算成功率。
                         </span>
                       </div>
                       <fieldset
