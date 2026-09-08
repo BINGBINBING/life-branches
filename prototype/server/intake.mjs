@@ -276,7 +276,9 @@ export function normalizeIntake(question, raw = {}) {
   const prefilled = candidates
     .filter((item) => Object.keys(prefill(question, item.id)).length > 0)
     .map((item) => item.id);
+  const explicitIds = new Set([...prefilled, ...extracted.keys()]);
   const selected = [];
+  let unansweredCount = 0;
   for (const id of [
     ...prefilled,
     ...extracted.keys(),
@@ -287,7 +289,7 @@ export function normalizeIntake(question, raw = {}) {
     const item = byId.get(id);
     if (!item || selected.some((field) => field.id === id)) continue;
     if (item.policy.voluntary_only && !requested.includes(id)) continue;
-    selected.push({
+    const field = {
       id: item.id,
       label: item.label,
       question: item.question,
@@ -296,8 +298,12 @@ export function normalizeIntake(question, raw = {}) {
       group: item.group,
       ...extracted.get(item.id),
       ...prefill(question, item.id),
-    });
-    if (selected.length === 6) break;
+    };
+    const hasInitialValue = Boolean(field.initialValue);
+    if (!hasInitialValue && !explicitIds.has(id) && unansweredCount >= 6)
+      continue;
+    selected.push(field);
+    if (!hasInitialValue) unansweredCount++;
   }
 
   return {
@@ -307,7 +313,7 @@ export function normalizeIntake(question, raw = {}) {
     sector,
     fields: selected,
     message:
-      '\u5148\u8865\u9f50\u8fd9\u4e9b\u4f1a\u5f71\u54cd\u68c0\u7d22\u548c\u5bf9\u7167\u7684\u6761\u4ef6\uff0c\u518d\u5f00\u59cb\u67e5\u627e\u77e5\u4e4e\u7ecf\u5386\u3002',
+      '\u5df2\u8bc6\u522b\u7684\u6761\u4ef6\u4f1a\u5168\u90e8\u4fdd\u7559\uff1b\u518d\u8865\u9f50\u6700\u591a 6 \u4e2a\u4f1a\u5f71\u54cd\u68c0\u7d22\u548c\u5bf9\u7167\u7684\u6761\u4ef6\u3002',
   };
 }
 

@@ -270,3 +270,32 @@ test('AI cannot write an explicit weekly duration into the daily field', async (
   assert.equal(fields.get('daily_time')?.initialValue, undefined);
   assert.equal(fields.get('weekly_hours')?.initialValue, '14小时/周');
 });
+
+test('validated known conditions do not consume the six-question allowance', () => {
+  const facts = [
+    ['current_education', '本科'],
+    ['current_job_function', '运营'],
+    ['target_industry', '软件'],
+    ['target_job_function', '前端'],
+    ['job_region', '上海'],
+    ['relevant_tenure', '3年'],
+    ['portfolio_or_work_sample', '已有作品'],
+    ['entry_level_acceptance', '接受'],
+  ];
+  const question = `${facts.map(([, value]) => value).join('，')}，想转行`;
+  const plan = normalizeIntake(question, {
+    scope: 'career_transition',
+    path: 'career_change',
+    sector: 'software',
+    extracted: facts.map(([conditionId, value]) => ({
+      conditionId,
+      value,
+      quote: value,
+    })),
+  });
+  const known = plan.fields.filter((field) => field.initialValue);
+  const unanswered = plan.fields.filter((field) => !field.initialValue);
+  assert.equal(known.length, facts.length);
+  assert.ok(unanswered.length <= 6);
+  assert.ok(plan.fields.length > 6);
+});

@@ -35,7 +35,11 @@ test('all evaluation questions produce bounded, controlled intake and search pla
     assert.equal(plan.scope, item.direction, item.id);
     assert.equal(plan.path, item.expectedPath, item.id);
     if (item.expectedSector) assert.equal(plan.sector, item.expectedSector, item.id);
-    assert.ok(plan.fields.length >= 4 && plan.fields.length <= 6, item.id);
+    assert.ok(plan.fields.length >= 4, item.id);
+    assert.ok(
+      plan.fields.filter((field) => !field.initialValue).length <= 6,
+      item.id,
+    );
     assert.ok(plan.fields.every((field) => dictionaryIndex.has(field.id)), item.id);
     const queries = searchQueries({
       question: item.question,
