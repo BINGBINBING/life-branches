@@ -2297,16 +2297,34 @@ export default function Workspace() {
                   </section>
                 )
               )}
-              {Boolean(job?.officialSources?.length) && (
+              {job?.status === 'done' &&
+                profile.decisionScope === 'major_transition' && (
                 <section className="official-sources-section">
                   <div className="official-heading">
                     <ShieldCheck size={18} />
                     <div>
                       <h2>学校或政府官方材料</h2>
                       <p className="meta">
-                        与知乎个人经验分开，仅表示页面当前内容。
+                        资格判断的独立前置层，不由知乎个人经验替代。
                       </p>
                     </div>
+                  </div>
+                  <div className="official-check missing">
+                    <div>
+                      <strong>官方资格依据</strong>
+                      <span
+                        className={`check-status ${job.officialAssessment?.eligibilityStatus === 'official_rules_found' ? 'confirmed' : 'unknown'}`}
+                      >
+                        {job.officialAssessment?.eligibilityStatus ===
+                        'official_rules_found'
+                          ? '已找到官方规则'
+                          : '资格未知'}
+                      </span>
+                    </div>
+                    <p>
+                      {job.officialAssessment?.eligibilityMessage ||
+                        '未找到可核对的目标学校官方规则。'}
+                    </p>
                   </div>
                   {job?.officialSources?.map((source) => (
                     <article key={source.id}>

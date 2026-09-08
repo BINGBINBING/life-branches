@@ -2,6 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildOfficialAssessment } from './official-assessment.mjs';
 
+test('missing official rules keep eligibility unknown', () => {
+  const result = buildOfficialAssessment([], {
+    conditionAnswers: { institution_name: '示例大学' },
+  });
+  assert.equal(result.eligibilityStatus, 'unknown');
+  assert.equal(result.basis, 'official_only');
+  assert.match(result.eligibilityMessage, /知乎个人经验不代替资格判断/);
+});
+
 test('official eligibility is compared only with same-field user values', () => {
   const result = buildOfficialAssessment(
     [
@@ -21,6 +30,7 @@ test('official eligibility is compared only with same-field user values', () => 
       ['assessment_subjects', 'confirmed'],
     ],
   );
+  assert.equal(result.eligibilityStatus, 'official_rules_found');
 });
 
 test('cost facts remain confirmed or missing without invented amounts', () => {

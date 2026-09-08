@@ -167,7 +167,21 @@ export function buildOfficialAssessment(officialSources, profile, options = {}) 
       }
     }
   }
+  const hasOfficialRules = Boolean(officialSources?.length);
+  const hasEligibilityRules = checks.some(
+    (item) => item.group === 'eligibility',
+  );
   return {
+    eligibilityStatus:
+      hasOfficialRules && hasEligibilityRules
+        ? 'official_rules_found'
+        : 'unknown',
+    eligibilityMessage: !hasOfficialRules
+      ? '资格未知：未提供或未成功读取目标学校官方规则，知乎个人经验不代替资格判断。'
+      : hasEligibilityRules
+        ? '已读取官方材料并分离核对其中可识别的资格条件。'
+        : '资格未知：已读取的官方材料中未识别出可用的资格规则。',
+    basis: 'official_only',
     checks,
     estimates: [],
     missing: rules

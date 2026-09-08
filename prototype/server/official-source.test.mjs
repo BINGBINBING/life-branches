@@ -18,6 +18,17 @@ test('official source only accepts education or government HTTPS hosts', () => {
     assert.throws(() => validateOfficialUrl(url));
 });
 
+test('a school name never acts as an official rule URL', async () => {
+  const sources = await fetchOfficialSources(
+    {
+      decisionScope: 'major_transition',
+      conditionAnswers: { institution_name: '示例大学' },
+    },
+    async () => assert.fail('fetch must not be called without policy_link'),
+  );
+  assert.deepEqual(sources, []);
+});
+
 test('official HTML is extracted separately with year metadata', async () => {
   const sources = await fetchOfficialSources(
     {

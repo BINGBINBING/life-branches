@@ -167,6 +167,9 @@ export type Job = {
   sources: Source[];
   officialSources?: OfficialSource[];
   officialAssessment?: {
+    eligibilityStatus?: 'unknown' | 'official_rules_found';
+    eligibilityMessage?: string;
+    basis?: 'official_only';
     checks: OfficialCheck[];
     estimates?: { id: string; label: string; value: string; basis: string }[];
     missing: { id: string; label: string; group: 'eligibility' | 'cost' }[];
