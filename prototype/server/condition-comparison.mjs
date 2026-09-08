@@ -7,6 +7,8 @@ export const COMPARABLE_CONDITIONS = Object.freeze({
     'weekly_hours',
     'current_term',
     'gpa_value',
+    'rank_percentile',
+    'rank_position',
     'failed_course_count',
     'makeup_credits',
     'application_deadline',
@@ -128,13 +130,43 @@ const parsers = {
       : null;
   },
   gpa_value(text, mode) {
+    const value = String(text || '');
+    if (mode === 'user') {
+      if (/%|百分位|排名|名次/.test(value)) return null;
+      return exactNumber(value, /([0-9]+(?:\.[0-9]+)?)/, '', {
+        max: 100,
+      });
+    }
+    const match = value.match(
+      /(?:GPA|绩点)([^，。0-9]{0,8})([0-9]+(?:\.[0-9]+)?)/i,
+    );
+    if (!match || /百分位|排名|名次|前/.test(match[1])) return null;
+    const suffix = value.slice((match.index || 0) + match[0].length);
+    if (/^\s*%/.test(suffix)) return null;
+    const parsed = Number(match[2]);
+    return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100
+      ? { normalized: parsed, display: String(parsed) }
+      : null;
+  },
+  rank_percentile(text, mode) {
+    const value = String(text || '');
+    const pattern =
+      mode === 'source'
+        ? /(?:排名|位于|专业|年级|班级)[^，。]{0,12}?(?:前\s*)?([0-9]+(?:\.[0-9]+)?)\s*%/
+        : /(?:前\s*)?([0-9]+(?:\.[0-9]+)?)\s*%/;
+    const parsed = exactNumber(value, pattern, '%', { max: 100 });
+    return parsed
+      ? { ...parsed, display: `前${parsed.normalized}%` }
+      : null;
+  },
+  rank_position(text, mode) {
     return exactNumber(
       text,
       mode === 'source'
-        ? /(?:GPA|绩点)[^，。0-9]{0,8}([0-9]+(?:\.[0-9]+)?)/i
-        : /([0-9]+(?:\.[0-9]+)?)/,
-      '',
-      { max: 100 },
+        ? /(?:排名|名次)[^，。0-9]{0,8}(?:第\s*)?([0-9]+)(?:\s*名|\s*\/)/
+        : /(?:第\s*)?([0-9]+)(?:\s*名|\s*\/)?/,
+      '名',
+      { min: 1, max: 100000 },
     );
   },
   failed_course_count(text, mode) {

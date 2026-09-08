@@ -347,6 +347,13 @@ const major = [
     'range',
   ],
   [
+    'rank_position',
+    'gpa_or_rank',
+    '成绩名次',
+    '你在班级或专业中的成绩名次是多少？',
+    'integer',
+  ],
+  [
     'rank_population',
     'gpa_or_rank',
     '排名比较群体',

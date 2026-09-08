@@ -10,7 +10,7 @@ const validQuote = (source, quote) =>
   source.snippets.some((text) => text.includes(quote)) ? quote : '';
 
 test('each decision scope exposes numeric and categorical conditions', () => {
-  assert.equal(COMPARABLE_CONDITIONS.major_transition.length, 9);
+  assert.equal(COMPARABLE_CONDITIONS.major_transition.length, 11);
   assert.equal(COMPARABLE_CONDITIONS.career_transition.length, 10);
 });
 
@@ -102,6 +102,59 @@ test('major conditions compare exact values and preserve source quotes', () => {
   );
   assert.equal(result[1].quote, '绩点3.7');
   assert.equal(result[1].userQuote, '3.2');
+});
+
+test('GPA, rank percentile, and rank position remain separate dimensions', () => {
+  const source = {
+    snippets: ['我的绩点排名是年级前15%，专业排名第3名。'],
+  };
+  const result = compareConditionEvidence(
+    source,
+    [
+      { conditionId: 'gpa_value', quote: '绩点排名是年级前15%' },
+      { conditionId: 'rank_percentile', quote: '绩点排名是年级前15%' },
+      { conditionId: 'rank_position', quote: '专业排名第3名' },
+    ],
+    {
+      decisionScope: 'major_transition',
+      conditionAnswers: {
+        gpa_value: '4.0',
+        rank_percentile: '前15%',
+        rank_position: '第5名',
+      },
+    },
+    validQuote,
+  );
+  assert.deepEqual(
+    result.map((item) => [item.conditionId, item.status]),
+    [
+      ['rank_percentile', 'similar'],
+      ['rank_position', 'different'],
+    ],
+  );
+  assert.ok(result.every((item) => item.conditionId !== 'gpa_value'));
+});
+
+test('a GPA and a rank percentile in the same source are compared independently', () => {
+  const source = {
+    snippets: ['我的GPA是3.7，成绩排名前15%。'],
+  };
+  const result = compareConditionEvidence(
+    source,
+    [],
+    {
+      decisionScope: 'major_transition',
+      conditionAnswers: { gpa_value: '3.7', rank_percentile: '前20%' },
+    },
+    validQuote,
+  );
+  assert.deepEqual(
+    result.map((item) => [item.conditionId, item.status]),
+    [
+      ['gpa_value', 'similar'],
+      ['rank_percentile', 'different'],
+    ],
+  );
 });
 
 test('local discovery works when the model omits condition evidence', () => {

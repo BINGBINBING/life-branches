@@ -710,7 +710,7 @@ function IntakeFields({
       daily_time: '小时/天', weekly_hours: '小时/周', continuous_session: '小时/次',
       preparation_months: '个月', enrollment_year: '年', policy_year: '年',
       current_term: '学期', attempts_remaining: '次', gpa_value: '',
-      rank_percentile: '%', failed_course_count: '门', incoming_quota: '人',
+      rank_percentile: '%', rank_position: '名', failed_course_count: '门', incoming_quota: '人',
       recognized_credits: '学分', makeup_credits: '学分', graduation_delay: '个月',
       extra_tuition: '元', relevant_tenure: '年', application_count: '份',
       interview_count: '次', income_gap_months: '个月', commute_ceiling: '分钟/单程',
