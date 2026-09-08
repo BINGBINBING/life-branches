@@ -304,6 +304,13 @@ function DynamicConditionForm({
           <fieldset className="followup" key={question.question}>
             <legend>{question.question}</legend>
             <p>{question.reason}</p>
+            <details className="quote-details">
+              <summary>触发这次补问的原文 <ChevronDown size={13} /></summary>
+              <blockquote>{question.quote}</blockquote>
+            </details>
+            <p className="meta">
+              回答后会更新已有经历中这一条件的对照及相关提示；暂不回答则保持待确认。本次更新不重新搜索或调用分析模型。
+            </p>
             <button
               type="button"
               className="text-button"
@@ -323,11 +330,11 @@ function DynamicConditionForm({
                 </button>
               ))}
             </div>
-            <label className="sr-only" htmlFor={`answer-${question.sourceId}`}>
+            <label className="sr-only" htmlFor={`answer-${encodeURIComponent(question.question)}`}>
               补充你的情况
             </label>
             <input
-              id={`answer-${question.sourceId}`}
+              id={`answer-${encodeURIComponent(question.question)}`}
               value={answer}
               maxLength={400}
               disabled={isSkipped}
