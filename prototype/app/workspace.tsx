@@ -740,13 +740,26 @@ function IntakeFields({
             </small>
             <small
               className={`intake-field-status ${
-                field.initialValue ? 'recognized' : 'unanswered'
+                profile.conditionAnswers?.[field.id] ? 'recognized' : 'unanswered'
               }`}
             >
-              {field.initialValue ? '已从描述识别，请确认' : '需要补充'}
+              {profile.conditionAnswers?.[field.id] === '尚未核实'
+                ? '已标记未知'
+                : profile.conditionAnswers?.[field.id]
+                  ? field.initialValue === profile.conditionAnswers[field.id]
+                    ? '已从描述识别，请确认'
+                    : '已填写'
+                  : '需要补充'}
             </small>
           </span>
-          {field.answerType === 'multi_select' ? (
+          {profile.conditionAnswers?.[field.id] === '尚未核实' ? (
+            <div aria-live="polite">
+              <p>尚未核实</p>
+              <button type="button" className="text-button" onClick={() => update(field.id, '')}>
+                重新填写
+              </button>
+            </div>
+          ) : field.answerType === 'multi_select' ? (
             <div className="multi-select-field">
               {(multiOptions[field.id] || []).map((option) => {
                 const values = (profile.conditionAnswers?.[field.id] || '')
@@ -847,7 +860,7 @@ function IntakeFields({
               onChange={(e) => update(field.id, e.target.value)}
             />
           )}
-          {!['boolean', 'single_choice'].includes(field.answerType) && (
+          {profile.conditionAnswers?.[field.id] !== '尚未核实' && !['boolean', 'single_choice'].includes(field.answerType) && (
             <button
               className="field-unknown"
               type="button"
