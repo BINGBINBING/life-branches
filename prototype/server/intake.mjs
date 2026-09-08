@@ -13,7 +13,37 @@ const majorPaths = [
   'second_bachelor',
 ];
 const decisionPaths = [...majorPaths, 'career_change'];
-const explicitDurationIds = new Set(['daily_time', 'weekly_hours']);
+const typedPrefillIds = new Set([
+  'daily_time',
+  'weekly_hours',
+  'current_stage',
+  'current_term',
+  'gpa_value',
+  'rank_percentile',
+  'rank_position',
+]);
+
+function hasFieldMeaning(id, value, quote) {
+  if (/^(?:未知|不清楚|不知道|待确认|尚未核实)$/.test(value)) return false;
+  if (id === 'current_job_function' || id === 'target_job_function') {
+    if (/^(?:在职|离职|待业|失业|就业|未就业|应届生|学生|全职|兼职)$/.test(value))
+      return false;
+  }
+  if (id === 'current_education') {
+    // A desired degree or someone else's requirement is not the user's education.
+    if (/要求|需要|目标|想|计划|准备|希望|朋友|同学|他|她/.test(quote)) return false;
+    if (!/^(?:我|本人|目前学历|现在学历|学历)/.test(quote)) return false;
+    const parsed = parseUserCondition(id, value);
+    const source = parseSourceCondition(id, quote);
+    return !!parsed && !!source && parsed.normalized === source.normalized;
+  }
+  if (typedPrefillIds.has(id)) {
+    const source = parseSourceCondition(id, quote);
+    const parsed = parseUserCondition(id, value);
+    return !!source && !!parsed && source.normalized === parsed.normalized;
+  }
+  return true;
+}
 const sectors = [
   'industrial',
   'design',
@@ -173,16 +203,7 @@ function extractedPrefills(question, raw, candidates) {
       !quote.toLowerCase().includes(value.toLowerCase())
     )
       continue;
-    if (explicitDurationIds.has(id)) {
-      const sourceValue = parseSourceCondition(id, quote);
-      const submittedValue = parseUserCondition(id, value);
-      if (
-        !sourceValue ||
-        !submittedValue ||
-        sourceValue.normalized !== submittedValue.normalized
-      )
-        continue;
-    }
+    if (!hasFieldMeaning(id, value, quote)) continue;
     values.set(id, { initialValue: value, initialQuote: quote });
   }
   return values;
@@ -191,7 +212,8 @@ function extractedPrefills(question, raw, candidates) {
 function prefill(question, id) {
   if (id === 'gpa_value') {
     const match = question.match(/(?:绩点|GPA)\s*(\d+(?:\.\d+)?)/i);
-    if (match) return { initialValue: match[1], initialQuote: match[0] };
+    if (match && parseSourceCondition(id, question))
+      return { initialValue: match[1], initialQuote: match[0] };
     return {};
   }
   if (id === 'daily_time') {
@@ -224,7 +246,8 @@ function prefill(question, id) {
     const quote = question.match(
       /(?:我是|本人|目前学历(?:是|为)?|学历(?:是|为)?)[^，。]{0,6}(?:博士|硕士|研究生|本科|学士|大专|专科|高中|中专)/,
     )?.[0];
-    const parsed = quote && parseUserCondition(id, quote);
+    const parsed =
+      quote && hasFieldMeaning(id, quote, quote) && parseUserCondition(id, quote);
     return parsed ? { initialValue: parsed.display, initialQuote: quote } : {};
   }
   if (

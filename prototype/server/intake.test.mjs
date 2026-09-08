@@ -282,7 +282,7 @@ test('validated known conditions do not consume the six-question allowance', () 
     ['portfolio_or_work_sample', '已有作品'],
     ['entry_level_acceptance', '接受'],
   ];
-  const question = `${facts.map(([, value]) => value).join('，')}，想转行`;
+  const question = `我是${facts.map(([, value]) => value).join('，')}，想转行`;
   const plan = normalizeIntake(question, {
     scope: 'career_transition',
     path: 'career_change',
@@ -290,7 +290,7 @@ test('validated known conditions do not consume the six-question allowance', () 
     extracted: facts.map(([conditionId, value]) => ({
       conditionId,
       value,
-      quote: value,
+      quote: conditionId === 'current_education' ? `我是${value}` : value,
     })),
   });
   const known = plan.fields.filter((field) => field.initialValue);
@@ -298,4 +298,40 @@ test('validated known conditions do not consume the six-question allowance', () 
   assert.equal(known.length, facts.length);
   assert.ok(unanswered.length <= 6);
   assert.ok(plan.fields.length > 6);
+});
+
+test('verbatim AI candidates still need the meaning of the destination field', () => {
+  const cases = [
+    ['我在职，想转行做开发', 'current_job_function', '在职', '我在职'],
+    ['我想转行，目标岗位要求本科', 'current_education', '本科', '目标岗位要求本科'],
+    ['我计划读本科，想转行', 'current_education', '本科', '我计划读本科'],
+    ['我朋友是本科，想转行', 'current_education', '本科', '我朋友是本科'],
+    ['我大一，想校内转专业', 'current_term', '大一', '我大一'],
+    ['我想校内转专业，绩点排名前15%', 'gpa_value', '15', '绩点排名前15%'],
+    ['我想转行，当前岗位未知', 'current_job_function', '未知', '当前岗位未知'],
+  ];
+  for (const [question, conditionId, value, quote] of cases) {
+    const plan = normalizeIntake(question, {
+      fieldIds: [conditionId],
+      extracted: [{ conditionId, value, quote }],
+    });
+    assert.equal(plan.fields.find((field) => field.id === conditionId)?.initialValue,
+      undefined, `${conditionId}: ${question}`);
+  }
+});
+
+test('explicit personal education and separate academic facts remain prefilled', () => {
+  const question = '我本科毕业，想校内转专业，现在第2学期，GPA3.6';
+  const plan = normalizeIntake(question, {
+    extracted: [
+      { conditionId: 'current_term', value: '2学期', quote: '现在第2学期' },
+      { conditionId: 'gpa_value', value: '3.6', quote: 'GPA3.6' },
+    ],
+  });
+  assert.equal(plan.fields.find((field) => field.id === 'current_term')?.initialValue, '2学期');
+  assert.equal(plan.fields.find((field) => field.id === 'gpa_value')?.initialValue, '3.6');
+  const career = normalizeIntake('我本科毕业，想转行做开发', {
+    extracted: [{ conditionId: 'current_education', value: '本科', quote: '我本科毕业' }],
+  });
+  assert.equal(career.fields.find((field) => field.id === 'current_education')?.initialValue, '本科');
 });
