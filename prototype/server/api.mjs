@@ -509,7 +509,6 @@ export function localApi(options = {}) {
                     job.status === 'error'
                       ? String(job.error || '').slice(0, 200)
                       : null,
-                  question: String(job.profile?.question || '').slice(0, 120),
                 });
               } catch {
                 // 用量记录失败不影响探索结果本身。

@@ -1,7 +1,7 @@
 // 轻量 JSONL 存储：用户反馈与用量记录。
 // 本实现落盘到 prototype/.local/（已被 .gitignore 忽略）。
 // 上云后替换为同接口的 KV/数据库实现即可，调用方无需改动。
-import { mkdir, appendFile, readFile } from 'node:fs/promises';
+import { mkdir, appendFile, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const DATA_DIR = join(process.cwd(), '.local');
@@ -55,13 +55,26 @@ export async function addUsage(record) {
     model: record.model ?? null,
     usage: record.usage ?? null,
     error: record.error ?? null,
-    question: record.question ?? '',
     at: Date.now(),
   });
 }
 
 export async function listUsage() {
-  return readLines('usage.jsonl');
+  const rows = await readLines('usage.jsonl');
+  const containsLegacyQuestions = rows.some((row) =>
+    Object.hasOwn(row, 'question'),
+  );
+  const sanitized = rows.map(({ question: _question, ...row }) => row);
+  if (containsLegacyQuestions) {
+    await mkdir(DATA_DIR, { recursive: true });
+    await writeFile(
+      join(DATA_DIR, 'usage.jsonl'),
+      sanitized.map((row) => JSON.stringify(row)).join('\n') +
+        (sanitized.length ? '\n' : ''),
+      'utf8',
+    );
+  }
+  return sanitized;
 }
 
 // ---- 持久搜索缓存：跨进程/重启复用知乎搜索结果（省额度） ----
@@ -81,7 +94,6 @@ async function compactFile(file) {
   const keep = [...latest.values()]
     .sort((a, b) => a.at - b.at)
     .slice(-Math.floor(SEARCH_MAX_LINES / 2));
-  const { writeFile } = await import('node:fs/promises');
   await writeFile(
     join(DATA_DIR, file),
     keep.map((r) => JSON.stringify(r)).join('\n') + (keep.length ? '\n' : ''),

@@ -18,7 +18,7 @@ type Summary = {
     lastRecords: {
       ok: boolean; reused: boolean; sources: number; provider: string | null;
       model: string | null; usage: Record<string, number> | null;
-      error: string | null; question: string; at: number;
+      error: string | null; at: number;
     }[];
   };
   feedback: {
@@ -328,7 +328,7 @@ export default function AdminPage() {
                 <th>Provider</th>
                 <th>模型</th>
                 <th>tokens</th>
-                <th>探索内容</th>
+                <th>错误类型</th>
               </tr>
             </thead>
             <tbody>
@@ -343,8 +343,8 @@ export default function AdminPage() {
                   <td>{u.provider ?? '—'}</td>
                   <td>{u.model ?? '—'}</td>
                   <td>{(u.usage?.total_tokens ?? 0).toLocaleString()}</td>
-                  <td className="admin-cell-ellipsis" title={u.error ?? u.question}>
-                    {u.error || u.question || '—'}
+                  <td className="admin-cell-ellipsis" title={u.error ?? ''}>
+                    {u.error || '—'}
                   </td>
                 </tr>
               ))}

@@ -66,7 +66,7 @@ npm run build
 ## 管理后台与用户反馈
 
 - 结果页右栏提供 1–5 星评分与可选评论；数据写入 `.local/feedback.jsonl`。
-- 每次探索（含失败）记一条用量：次数、来源数、provider/模型、token 用量与问题概要，写入 `.local/usage.jsonl`。
+- 每次探索（含失败）记一条用量：次数、来源数、provider/模型、token 用量与错误类型，写入 `.local/usage.jsonl`；不记录用户问题原文。
 - 管理页面位于 `/admin`：概览指标、token 汇总、知乎实时额度、反馈列表与最近使用记录。管理密码读取 `ADMIN_PASSWORD`，未设置时回退默认值 `life-branches-dev`（仅限本地开发，正式使用必须显式设置）。
 - 顶栏「开发者密钥」面板可在开发期临时注入知乎 Access Secret 与分析 AI Key，仅存服务进程内存，刷新 / 重启即失效；未注入时行为与默认配置完全一致。
 - 存储实现见 `server/storage.mjs`；上云时替换为同接口的 KV/数据库实现，数据文件与密钥不进入仓库（`.local/`、`.env*` 均已忽略）。
