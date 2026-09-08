@@ -186,6 +186,26 @@ test('invalid choices do not start remote requests', async () => {
     400,
   );
 });
+test('decision route can be corrected without an AI intake call', async () => {
+  const response = await call('/api/branches/intake', 'POST', {
+    question: '我想转专业',
+    decisionPath: 'minor',
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.value.path, 'minor');
+  assert.equal(response.value.generatedBy, 'local-route-change');
+  assert.ok(
+    response.value.fields.some(
+      (field) => field.id === 'minor_application_eligibility',
+    ),
+  );
+  const [query] = searchQueries({
+    decisionScope: response.value.scope,
+    decisionPath: response.value.path,
+    conditionAnswers: {},
+  });
+  assert.match(query, /辅修/);
+});
 test('unknown previous exploration cannot trigger rematching', async () => {
   assert.equal(
     (

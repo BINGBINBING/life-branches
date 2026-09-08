@@ -1188,6 +1188,40 @@ export default function Workspace() {
     [],
   );
 
+  async function changeDecisionPath(decisionPath: string) {
+    if (busy || !profile.question) return;
+    setBusy(true);
+    setError('');
+    try {
+      const plan = await request<IntakePlan>('/api/branches/intake', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: profile.question, decisionPath }),
+      });
+      const allowed = new Set(plan.fields.map((field) => field.id));
+      const conditionAnswers = Object.fromEntries(
+        Object.entries(profile.conditionAnswers).filter(([id]) =>
+          allowed.has(id),
+        ),
+      );
+      for (const field of plan.fields)
+        if (!conditionAnswers[field.id] && field.initialValue)
+          conditionAnswers[field.id] = field.initialValue;
+      setIntake(plan);
+      setProfile({
+        ...profile,
+        decisionScope: plan.scope,
+        decisionPath: plan.path,
+        decisionSector: plan.sector,
+        conditionAnswers,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '选择类型暂时无法修改。');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const explore = useCallback(
     async (nextProfile: Profile, previousId?: string) => {
       if (activeRequest.current) return;
@@ -1728,6 +1762,27 @@ export default function Workspace() {
                     void explore(profile);
                   }}
                 >
+                  <label className="field-label decision-path-field">
+                    <span>
+                      这次研究的选择类型
+                      <small className="meta">
+                        修改后会更新条件表和后续搜索计划，不会立即搜索或调用 DeepSeek
+                      </small>
+                    </span>
+                    <select
+                      value={profile.decisionPath}
+                      disabled={busy}
+                      onChange={(event) =>
+                        void changeDecisionPath(event.target.value)
+                      }
+                    >
+                      <option value="campus_transfer">校内转专业</option>
+                      <option value="cross_major_graduate">跨专业读研</option>
+                      <option value="minor">辅修</option>
+                      <option value="second_bachelor">第二学士学位</option>
+                      <option value="career_change">转行业 / 转岗</option>
+                    </select>
+                  </label>
                   {intake && (
                     <IntakeFields
                       plan={intake}

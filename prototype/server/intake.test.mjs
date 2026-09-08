@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createIntakePlan, normalizeIntake } from './intake.mjs';
+import {
+  createIntakePlan,
+  createLocalIntakePlan,
+  normalizeIntake,
+} from './intake.mjs';
 
 test('pre-search intake stays inside the supported decision scopes', () => {
   assert.equal(normalizeIntake('想出国读硕士').supported, false);
@@ -96,6 +100,32 @@ test('intake fields carry dictionary choice labels to the frontend', () => {
   const field = plan.fields.find((item) => item.id === 'income_continuity');
   assert.equal(field.answerType, 'single_choice');
   assert.ok(field.options.some((option) => option.label === '需要保持稳定收入'));
+});
+
+test('decision route correction rebuilds the field catalogue locally', () => {
+  const graduate = createLocalIntakePlan(
+    '本科计算机，正在考虑之后的专业选择',
+    'cross_major_graduate',
+  );
+  assert.equal(graduate.scope, 'major_transition');
+  assert.equal(graduate.path, 'cross_major_graduate');
+  assert.equal(graduate.generatedBy, 'local-route-change');
+  assert.ok(
+    graduate.fields.some(
+      (field) => field.id === 'graduate_admission_eligibility',
+    ),
+  );
+  const career = createLocalIntakePlan(
+    '本科计算机，想做软件开发',
+    'career_change',
+  );
+  assert.equal(career.scope, 'career_transition');
+  assert.equal(career.path, 'career_change');
+  assert.ok(career.fields.some((field) => field.id === 'target_job_function'));
+  assert.throws(() => createLocalIntakePlan('我想做选择', 'invented'));
+  assert.throws(() =>
+    createLocalIntakePlan(`我想转专业${'x'.repeat(2000)}`, 'campus_transfer'),
+  );
 });
 
 test('target sector wins over the current job named earlier in the question', () => {

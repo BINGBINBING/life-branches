@@ -15,7 +15,7 @@ import { curatedArchive } from './archive-annotations.mjs';
 import { fetchOfficialSources } from './official-source.mjs';
 import { buildOfficialAssessment } from './official-assessment.mjs';
 import { analysisProvider, requiredQuotaIds } from './deepseek.mjs';
-import { createIntakePlan } from './intake.mjs';
+import { createIntakePlan, createLocalIntakePlan } from './intake.mjs';
 import { createResearchStore } from './research-store.mjs';
 import { createTelemetry, failureCategory } from './telemetry.mjs';
 import { addFeedback, listFeedback, addUsage, listUsage } from './storage.mjs';
@@ -175,6 +175,12 @@ export function localApi(options = {}) {
             )
               return send(res, 415, { error: '请求格式不正确。' });
             const input = await body(req);
+            if (input?.decisionPath)
+              return send(
+                res,
+                200,
+                createLocalIntakePlan(input?.question, input.decisionPath),
+              );
             if (intakeActive >= 2)
               return send(res, 429, {
                 error: '已有条件表单正在生成，请稍后重试。',

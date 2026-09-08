@@ -9,6 +9,7 @@ const majorPaths = [
   'minor',
   'second_bachelor',
 ];
+const decisionPaths = [...majorPaths, 'career_change'];
 const sectors = [
   'industrial',
   'design',
@@ -287,6 +288,29 @@ export function normalizeIntake(question, raw = {}) {
     fields: selected,
     message:
       '\u5148\u8865\u9f50\u8fd9\u4e9b\u4f1a\u5f71\u54cd\u68c0\u7d22\u548c\u5bf9\u7167\u7684\u6761\u4ef6\uff0c\u518d\u5f00\u59cb\u67e5\u627e\u77e5\u4e4e\u7ecf\u5386\u3002',
+  };
+}
+
+export function createLocalIntakePlan(question, decisionPath) {
+  if (
+    typeof question !== 'string' ||
+    question.trim().length < 2 ||
+    question.length > 2000
+  )
+    throw new Error('请填写 2–2000 字的一个具体选择。');
+  if (!decisionPaths.includes(decisionPath))
+    throw new Error('选择类型无效。');
+  const scope =
+    decisionPath === 'career_change'
+      ? 'career_transition'
+      : 'major_transition';
+  return {
+    ...normalizeIntake(question.trim(), {
+      scope,
+      path: decisionPath,
+      sector: inferredSector(question),
+    }),
+    generatedBy: 'local-route-change',
   };
 }
 
