@@ -4,19 +4,22 @@ export const OUTCOME_STAGES = Object.freeze({
       id: 'application_eligible',
       label: '获得申请资格',
       result: 'success',
-      pattern: /(?:符合|通过|获得|取得).{0,8}(?:申请|报名|转专业)资格/,
+      pattern:
+        /(?:符合|获得|取得).{0,8}(?:转专业)?(?:申请|报名)资格|(?:转专业).{0,8}(?:符合|获得|取得).{0,4}资格/,
     },
     {
       id: 'assessment_passed',
       label: '通过转专业考核',
       result: 'success',
-      pattern: /(?:通过|过了).{0,10}(?:转专业)?(?:考核|笔试|面试)/,
+      pattern:
+        /(?:通过|过了).{0,6}转专业(?:考核|笔试|面试)|转专业(?:考核|笔试|面试).{0,6}(?:通过|过了)/,
     },
     {
       id: 'transfer_approved',
       label: '转专业获批',
       result: 'success',
-      pattern: /(?:转专业|转入).{0,10}(?:获批|通过|成功|公示)/,
+      pattern:
+        /(?:转专业|转入)(?:申请)?(?:最终|最后|顺利|已经)?(?:获批|成功|通过|公示通过)/,
     },
     {
       id: 'transfer_completed',
@@ -56,7 +59,7 @@ export const OUTCOME_STAGES = Object.freeze({
       id: 'offer_received',
       label: '获得目标岗位录用',
       result: 'success',
-      pattern: /(?:拿到|获得|收到).{0,12}(?:offer|录用通知|录取通知)/i,
+      pattern: /(?:拿到|获得|收到).{0,12}(?:offer|录用通知)/i,
     },
     {
       id: 'joined_target_role',
@@ -102,8 +105,17 @@ export function validateOutcomeStage(source, raw, scope, validQuote) {
   );
   if (!stage) return null;
   const quote = validQuote(source, raw.quote);
+  const downstreamMajorResult =
+    stage.id === 'transfer_approved' &&
+    /(?:转专业|转入).{0,12}(?:毕业|就业|入职|大厂|offer).{0,12}(?:成功|通过|获批)/i.test(quote);
+  const learningOnly =
+    stage.id === 'joined_target_role' &&
+    /(?:学习|课程|培训|项目)/.test(quote) &&
+    !/(?:入职|任职|工作|岗位|转岗|成为.{0,8}工程师)/.test(quote);
   if (
     !quote ||
+    downstreamMajorResult ||
+    learningOnly ||
     /(?:想|希望|计划|准备|目标|如何|怎么|如果|为了).{0,12}(?:入职|进入|转入|转到|获得|通过|拿到)/.test(
       quote,
     ) ||

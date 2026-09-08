@@ -81,3 +81,57 @@ test('intentions and generic advice are not treated as completed stages', () => 
     null,
   );
 });
+
+test('downstream graduation or employment cannot prove transfer approval', () => {
+  const source = {
+    snippets: ['我转专业后毕业成功进入大厂，但没写当年申请结果。'],
+  };
+  assert.equal(
+    validateOutcomeStage(
+      source,
+      {
+        stageId: 'transfer_approved',
+        quote: '我转专业后毕业成功进入大厂',
+      },
+      'major_transition',
+      validQuote,
+    ),
+    null,
+  );
+  assert.equal(discoverOutcomeStage(source, 'major_transition', validQuote), null);
+});
+
+test('each stage requires its own event wording', () => {
+  const major = { snippets: ['我通过了某公司面试。'] };
+  assert.equal(
+    validateOutcomeStage(
+      major,
+      { stageId: 'assessment_passed', quote: '我通过了某公司面试' },
+      'major_transition',
+      validQuote,
+    ),
+    null,
+  );
+  const career = { snippets: ['我进入前端开发课程学习。'] };
+  assert.equal(
+    validateOutcomeStage(
+      career,
+      { stageId: 'joined_target_role', quote: '我进入前端开发课程学习' },
+      'career_transition',
+      validQuote,
+    ),
+    null,
+  );
+});
+
+test('explicit approval wording still proves only the approval stage', () => {
+  const source = { snippets: ['我的转专业申请最终获批。'] };
+  const stage = validateOutcomeStage(
+    source,
+    { stageId: 'transfer_approved', quote: '我的转专业申请最终获批' },
+    'major_transition',
+    validQuote,
+  );
+  assert.equal(stage.id, 'transfer_approved');
+  assert.equal(stage.quote, '我的转专业申请最终获批');
+});
