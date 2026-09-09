@@ -620,8 +620,11 @@
   font-size: 15px;
   overflow-wrap: anywhere;
 }
-.experience-facts details {
+.experience-facts > div > :not(h4) {
   grid-column: 2;
+}
+.experience-facts p.meta {
+  font-size: 13px;
 }
 .condition-comparisons {
   margin-top: 20px;
@@ -1067,6 +1070,10 @@ blockquote {
   gap: 16px;
   margin-bottom: 10px;
 }
+.dialog-heading > button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
@@ -1204,7 +1211,7 @@ blockquote {
     grid-template-columns: 1fr;
     gap: 5px;
   }
-  .experience-facts details {
+  .experience-facts > div > :not(h4) {
     grid-column: 1;
   }
   .cases-heading {

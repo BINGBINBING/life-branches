@@ -10,6 +10,7 @@
     "build": "vinext build",
     "start": "vinext dev --host 127.0.0.1 --port 4317",
     "test": "node --test server/*.test.mjs",
+    "test:browser": "playwright test",
     "eval": "node --test server/evaluation.test.mjs",
     "lint": "oxlint",
     "format": "oxfmt"
@@ -42,6 +43,7 @@
     "@cloudflare/vite-plugin": "^1.54.4",
     "@cloudflare/workers-types": "^5.20260907.1",
     "@openai/sites-vite-plugin": "0.2.0",
+    "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",

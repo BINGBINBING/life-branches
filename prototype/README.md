@@ -125,3 +125,14 @@ that file share its transactional limit; independent hosts do not share a budget
 Client identity uses the socket address, not untrusted forwarded headers. Behind
 a reverse proxy, users may consequently share the connection-level limit.
 Development remains unrestricted by this gate. Do not publish the database.
+
+### Browser Regression Checks
+
+Run `npx playwright install chromium` once, then `npm run test:browser`.
+The test runner starts a local server on port 4320. When a development server is
+already running, use `E2E_BASE_URL=http://127.0.0.1:4318 npm run test:browser`.
+Tests intercept API requests with synthetic fixtures and consume no Zhihu or
+DeepSeek quota. They cover initial intake, confirmation before research,
+results, multi-question dialog, draft retention and batch rematching at desktop
+and two mobile sizes. Screenshots stay in ignored `.local/browser-test-results`.
+These controlled checks do not replace real-service or cross-browser acceptance.
