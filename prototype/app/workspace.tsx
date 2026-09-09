@@ -2220,7 +2220,7 @@ export default function Workspace() {
                       </div>
                       <fieldset
                         className="result-filters"
-                        aria-label="筛选经历结果"
+                        aria-label="筛选当前路径样本，不代表成功率"
                       >
                         {[
                           ['all', '全部'],
@@ -2236,7 +2236,7 @@ export default function Workspace() {
                             onClick={() => setFilter(key)}
                           >
                             {label}
-                            <span>
+                            <span aria-label="当前样本数">
                               {key === 'all'
                                 ? cases.length
                                 : cases.filter((c) => c.result === key).length}
