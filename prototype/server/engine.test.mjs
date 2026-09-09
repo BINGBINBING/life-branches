@@ -205,6 +205,8 @@ test('all retained sources are passed to analysis', async () => {
   assert.match(prompt, /"id":"S1"/);
   assert.match(prompt, /"id":"S100"/);
   assert.match(prompt, /详细案例总共最多8个，每条路径最多2个/);
+  assert.match(prompt, /title仅用于定位主题，不能作为事实证据/);
+  assert.match(prompt, /excerpts是搜索摘要而非全文/);
 });
 test('local validation enforces the detailed case ceiling', () => {
   const manySources = Array.from({ length: 12 }, (_, index) => ({
