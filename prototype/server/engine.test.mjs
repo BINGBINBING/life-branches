@@ -45,6 +45,15 @@ test('quoted attitude is not promoted into an observable action', () => {
   assert.equal(result.insights.length, 0);
 });
 
+test('an attempted written assessment remains a case when its outcome is failure', () => {
+  const quote = '我参加了转专业笔试';
+  const result = validateAnalysis({ paths: [{ cases: [{ sourceId: 'S1', action: { text: quote, quote } }] }] },
+    [{ id: 'S1', title: '虚构转专业案例', snippets: [`${quote}，我未通过转专业考核。`] }],
+    { ...profile, decisionScope: 'major_transition', decisionPath: 'campus_transfer' });
+  assert.equal(result.paths[0].cases[0].result, 'setback');
+  assert.equal(result.paths[0].cases[0].stage.id, 'assessment_failed');
+});
+
 test('missing basics generate questions without fabricated evidence', () => {
   const input = { decisionPath: 'campus_transfer', conditionAnswers: { institution_name: '尚未核实' } };
   const questions = researchQuestions([], input);
