@@ -4,9 +4,12 @@
 import { mkdir, appendFile, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createSearchCache } from './search-cache.mjs';
+import { failureCategory } from './telemetry.mjs';
 
 const DATA_DIR = join(process.cwd(), '.local');
 const searchCache = createSearchCache();
+const errorCategories = new Set(['quota_or_rate_limit', 'provider_failure', 'validation_failure', 'unknown_failure']);
+const safeError = (error) => error == null ? null : errorCategories.has(error) ? error : failureCategory({ message: String(error) });
 
 async function appendLine(file, obj) {
   await mkdir(DATA_DIR, { recursive: true });
@@ -56,7 +59,7 @@ export async function addUsage(record) {
     provider: record.provider ?? null,
     model: record.model ?? null,
     usage: record.usage ?? null,
-    error: record.error ?? null,
+    error: safeError(record.error),
     at: Date.now(),
   });
 }
@@ -64,9 +67,9 @@ export async function addUsage(record) {
 export async function listUsage() {
   const rows = await readLines('usage.jsonl');
   const containsLegacyQuestions = rows.some((row) =>
-    Object.hasOwn(row, 'question'),
+    Object.hasOwn(row, 'question') || (row.error != null && !errorCategories.has(row.error)),
   );
-  const sanitized = rows.map(({ question: _question, ...row }) => row);
+  const sanitized = rows.map(({ question: _question, ...row }) => ({ ...row, error: safeError(row.error) }));
   if (containsLegacyQuestions) {
     await mkdir(DATA_DIR, { recursive: true });
     await writeFile(

@@ -15,12 +15,12 @@ test('usage storage drops new and legacy question text', async () => {
     );
     await writeFile(
       join(dataDir, 'usage.jsonl'),
-      `${JSON.stringify({ kind: 'explore', question: '私人问题', at: 1 })}\n`,
+      `${JSON.stringify({ kind: 'explore', question: '私人问题', error: '错误中夹带私人描述', at: 1 })}\n`,
       'utf8',
     );
     const script = `
       const storage = await import(${JSON.stringify(moduleUrl)});
-      await storage.addUsage({ ok: true, question: '不应保存' });
+      await storage.addUsage({ ok: false, question: '不应保存', error: 'DeepSeek 错误中夹带私人描述' });
       const rows = await storage.listUsage();
       if (rows.some((row) => Object.hasOwn(row, 'question'))) process.exit(2);
     `;
@@ -30,7 +30,9 @@ test('usage storage drops new and legacy question text', async () => {
     });
     assert.equal(result.status, 0, result.stderr);
     const stored = await readFile(join(dataDir, 'usage.jsonl'), 'utf8');
-    assert.doesNotMatch(stored, /私人问题|不应保存|"question"/);
+    assert.doesNotMatch(stored, /私人问题|不应保存|"question"|私人描述/);
+    assert.match(stored, /unknown_failure/);
+    assert.match(stored, /provider_failure/);
   } finally {
     await rm(resolve(cwd), { recursive: true, force: true });
   }
