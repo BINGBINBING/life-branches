@@ -533,8 +533,8 @@ function HistoryDialog({
       onClose={onClose}
     >
       <div className="history-head">
-        <strong>我的历史探索</strong>
-        <span className="meta">保存在此浏览器中</span>
+        <strong>当前设备快速历史</strong>
+        <span className="meta">仅此浏览器 · 删除不影响服务端研究版本</span>
         <button
           type="button"
           className="icon-button"
@@ -1058,7 +1058,7 @@ export default function Workspace() {
   }
 
   async function removeResearch(id: string) {
-    if (!window.confirm('删除这条本地研究记录？此操作不能撤销。')) return;
+    if (!window.confirm('删除这条服务端研究版本？不会删除当前浏览器的快速历史，此操作不能撤销。')) return;
     try {
       await request(`/api/branches/researches/${id}`, { method: 'DELETE' });
       if (savedRecordId === id) setSavedRecordId('');
@@ -1666,7 +1666,7 @@ export default function Workspace() {
                 <details className="quote-details">
                   <summary>数据保存范围 <ChevronDown size={13} /></summary>
                   <p className="meta">
-                    完成的探索会自动保存在当前浏览器，最多 20 条；点击“保存记录”会在本服务保存研究版本，最多 60 条，可从记录入口删除。当前服务的研究记录尚未按访问者隔离。
+                    完成的探索会自动保存在当前浏览器的快速历史，最多 20 条；点击“保存研究版本”会在本服务保存研究版本，最多 60 条，可分别从对应入口删除。当前服务的研究记录尚未按访问者隔离。
                   </p>
                   <p className="meta">
                     搜索查询及返回片段会在服务端缓存复用 24 小时。用量日志只保存调用状态、来源数、模型、token 和错误类型，不保存你的问题原文；提交反馈时会单独保存问题概要。这些日志不会随研究记录删除，外部服务还会按各自的数据政策处理收到的内容。
@@ -1694,9 +1694,10 @@ export default function Workspace() {
                 <section className="research-records">
                   <div className="records-heading">
                     <History size={18} />
-                    <h2>本地研究记录</h2>
+                    <h2>服务端研究版本</h2>
                     <span className="meta">{records.length}</span>
                   </div>
+                  <p className="meta">保存在运行本网站的服务器，不是访问者的电脑。当前尚未按访问者隔离；删除不影响浏览器快速历史。</p>
                   {records.map((record) => (
                     <article key={record.id}>
                       <button
@@ -1883,12 +1884,12 @@ export default function Workspace() {
             </button>
             {job?.status === 'done' && (
               <button
-                title="保存本地研究记录"
+                title="保存服务端研究版本"
                 disabled={Boolean(savedRecordId)}
                 onClick={() => void saveResearch()}
               >
                 {savedRecordId ? <Check size={16} /> : <Save size={16} />}
-                {savedRecordId ? '已保存' : '保存记录'}
+                {savedRecordId ? '版本已保存' : '保存研究版本'}
               </button>
             )}
             <div className="condition-line">
