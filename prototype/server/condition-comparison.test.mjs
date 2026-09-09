@@ -4,10 +4,38 @@ import {
   COMPARABLE_CONDITIONS,
   compareConditionEvidence,
   questionsFromComparisons,
+  selectDynamicQuestions,
 } from './condition-comparison.mjs';
 
 const validQuote = (source, quote) =>
   source.snippets.some((text) => text.includes(quote)) ? quote : '';
+
+test('dynamic candidate pool retains all fields and selects eight by decision relevance', () => {
+  const ids = COMPARABLE_CONDITIONS.major_transition;
+  const caseItem = {
+    sourceId: 'S1',
+    conditionComparisons: ids.map((conditionId) => ({
+      conditionId, needsUserInput: true, quote: `已校验的${conditionId}原句`,
+    })),
+  };
+  const candidates = questionsFromComparisons(
+    [{ cases: [caseItem, { ...caseItem, sourceId: 'S2' }] }],
+    { conditionAnswers: {}, skipped: [] },
+  );
+  assert.equal(candidates.length, ids.length);
+  const selected = selectDynamicQuestions(candidates);
+  assert.equal(selected.length, 8);
+  assert.equal(new Set(selected.map((item) => item.conditionId)).size, 8);
+  assert.ok(selected.some((item) => item.conditionId === 'application_deadline'));
+  assert.ok(selected.some((item) => item.conditionId === 'policy_verified'));
+  assert.equal(selectDynamicQuestions(candidates.slice(0, 6)).length, 6);
+  assert.deepEqual(selectDynamicQuestions([]), []);
+  const answered = questionsFromComparisons([{ cases: [caseItem] }], {
+    conditionAnswers: { daily_time: '2小时/天' },
+    skipped: [candidates.find((item) => item.conditionId === 'weekly_hours').question],
+  });
+  assert.ok(!answered.some((item) => ['daily_time', 'weekly_hours'].includes(item.conditionId)));
+});
 
 test('each decision scope exposes numeric and categorical conditions', () => {
   assert.equal(COMPARABLE_CONDITIONS.major_transition.length, 12);

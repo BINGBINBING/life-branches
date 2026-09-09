@@ -490,6 +490,24 @@ export function compareConditionEvidence(source, raw, profile, validQuote) {
   return result;
 }
 
+export const DYNAMIC_QUESTION_LIMIT = 8;
+const criticalQuestions = new Set([
+  'application_deadline', 'transfer_restriction', 'policy_verified',
+  'gpa_value', 'current_education', 'income_continuity',
+  'income_gap_months', 'daily_time', 'weekly_hours',
+]);
+
+export function selectDynamicQuestions(candidates) {
+  const unique = new Map();
+  for (const question of candidates) {
+    const key = question.conditionId || question.question;
+    if (!unique.has(key)) unique.set(key, question);
+  }
+  return [...unique.values()]
+    .sort((a, b) => Number(criticalQuestions.has(b.conditionId)) - Number(criticalQuestions.has(a.conditionId)))
+    .slice(0, DYNAMIC_QUESTION_LIMIT);
+}
+
 export function questionsFromComparisons(paths, profile) {
   const questions = [];
   const seen = new Set();
@@ -520,7 +538,6 @@ export function questionsFromComparisons(paths, profile) {
               : [],
         });
         seen.add(condition.id);
-        if (questions.length === 2) return questions;
       }
     }
   }

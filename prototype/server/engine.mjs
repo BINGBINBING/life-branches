@@ -9,6 +9,7 @@ import {
   COMPARABLE_CONDITIONS,
   compareConditionEvidence,
   questionsFromComparisons,
+  selectDynamicQuestions,
 } from './condition-comparison.mjs';
 import { buildDecisionInsights } from './decision-summary.mjs';
 import {
@@ -696,7 +697,7 @@ export function validateAnalysis(raw, sources, profile) {
     });
   }
   const questions = questionsFromComparisons(paths, profile);
-  if (questions.length < 2) {
+  if (!questions.some((item) => item.conditionId === 'daily_time')) {
     for (const source of sources.filter((s) => seen.has(s.id))) {
       const question = timeQuestion(source, profile);
       if (
@@ -720,7 +721,7 @@ export function validateAnalysis(raw, sources, profile) {
   return {
     paths,
     insights: decisionInsights,
-    questions,
+    questions: selectDynamicQuestions(questions),
     rejected,
     rejectionReasons,
     citationPassRate: citationAttempts
@@ -771,7 +772,7 @@ export function rematchAnalysis(previous, sources, profile) {
     profile,
   );
   const questions = questionsFromComparisons(paths, profile);
-  if (questions.length < 2) {
+  if (!questions.some((item) => item.conditionId === 'daily_time')) {
     for (const source of sources.filter((item) =>
       cases.some((entry) => entry.sourceId === item.id),
     )) {
@@ -786,7 +787,7 @@ export function rematchAnalysis(previous, sources, profile) {
     ...previous,
     paths,
     insights: buildDecisionInsights(paths, previous.insights || []),
-    questions: questions.slice(0, 2),
+    questions: selectDynamicQuestions(questions),
     analyzedAt: Date.now(),
     decisionClassification:
       profile.decisionScope === 'career_transition'
@@ -829,7 +830,7 @@ export async function analyze(sources, profile, progress, options = {}) {
 comparison比较用户和案例，status为similar/different/unknown；quote为案例原文，userQuote为用户给出的连续原文。未知条件不得猜测。相似仅表示某项条件相似，不代表总体匹配。以用户最新补充为准。
 严格约束：在校不等于学习时间充裕，在职不等于每天投入少。只有原文明确量化时间才可比较时长。不能从“不能中断收入”断言绝不接受任何贷款，也不能把贷款与脱产合成一个问题。作者提到在职或公司业务时，不得将其项目瓶颈写成尚未成功入行。每个text仅表达所绑定quote支持的事实，其他证据可在其他字段表达。
 insights最多各2条practice/risk，说明可参考做法与限制或风险与用户的关系，以“作者自述”“可能”区分证据与推断。
-questions最多2个，只问来源里明确存在、用户尚未说明、能影响适用性的用户条件；不重复用户已回答/跳过的主题，不问原作者缺失条件。question具体且简短，reason解释哪段来源为什么需要对比。
+questions只问来源里明确存在、用户尚未说明、能影响适用性的用户条件；不重复用户已回答/跳过的主题，不问原作者缺失条件。最终补问由本地按校验后的条件证据去重和排序，每轮最多8个，不为凑数编造问题。question具体且简短，reason解释哪段来源为什么需要对比。
 每个案例可在 conditionEvidence 中提交最多6个可量化条件，仅限当前方向允许的 ID：${JSON.stringify(COMPARABLE_CONDITIONS[profile.decisionScope] || [])}。每项只返回 conditionId 和案例连续原文 quote，不要计算相似度或推断用户值。
 每个案例可提交一个 outcomeStage，仅限当前方向阶段：${JSON.stringify(stageCatalogue(profile.decisionScope))}。只有原文直接说明该阶段时才提交 stageId 和连续 quote；完成学习、课程或项目不等于获得录用或成功入行。
 先通读question/background/time/goal/answers中的全部已知条件，再决定提问。用户明确不能中断收入时，不再追问能否脱产；用户明确无编程基础时，不再询问是否学过编程。每个补问只涉及一个条件。找不到真正未知且有来源依据的条件时，questions必须为空数组。
