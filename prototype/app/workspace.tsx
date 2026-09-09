@@ -167,6 +167,7 @@ function ExperienceCard({
         )}
       </div>
       <h3>{source.title.replace(/\s*-\s*知乎$/, '')}</h3>
+      <p className="meta">仅依据检索摘要 · 未核验全文及事件真实性，可能缺少否定、转折或后续结果。</p>
       <div className="author-row">
         <span>{source.author}</span>
         {source.badge && <span>{source.badge}</span>}
@@ -2488,6 +2489,7 @@ export default function Workspace() {
                           <SourceLink source={s} />
                         </div>
                         <p className="meta">
+                          仅摘要 ·{' '}
                           {s.author} ·{' '}
                           {s.editTime
                             ? `发布或更新时间：${new Date(s.editTime * 1000).toLocaleDateString('zh-CN')}`

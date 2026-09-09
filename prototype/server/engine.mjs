@@ -396,6 +396,7 @@ export function aggregate(results) {
           author: limited(item.AuthorName || '作者信息未返回', 80),
           badge: limited(item.AuthorBadgeText, 100),
           editTime: item.EditTime || null,
+          contentBasis: 'search_excerpt',
           snippets: [],
           queries: [],
         });
@@ -590,7 +591,7 @@ export async function search(
 function evidence(source, value) {
   const quote = limited(value, 700);
   return quote.length >= 5 &&
-    [source.title, ...source.snippets].some((s) => s.includes(quote))
+    source.snippets.some((s) => s.includes(quote))
     ? quote
     : '';
 }
@@ -598,7 +599,7 @@ function evidence(source, value) {
 function fact(source, item) {
   const quote = evidence(source, item?.quote);
   return quote && clean(item?.text)
-    ? { text: quote, quote, sourceId: source.id, verification: 'verbatim-only' }
+    ? { text: quote, quote, sourceId: source.id, verification: 'verbatim-only', contentBasis: 'search_excerpt' }
     : null;
 }
 

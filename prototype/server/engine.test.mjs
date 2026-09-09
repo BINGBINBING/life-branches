@@ -12,6 +12,14 @@ import {
 
 const profile = validProfile({ question: '在职转行开发', time: '每天两小时' });
 
+test('a title alone cannot validate an action citation', () => {
+  const result = validateAnalysis({ paths: [{ cases: [{ sourceId: 'S1',
+    action: { text: '已经找到工作', quote: '已经找到工作' },
+  }] }] }, [{ id: 'S1', title: '已经找到工作', snippets: ['想请教大家如何开始准备'] }], profile);
+  assert.equal(result.paths.length, 0);
+  assert.equal(result.rejectionReasons.missingActionCitation, 1);
+});
+
 test('missing basics generate questions without fabricated evidence', () => {
   const input = { decisionPath: 'campus_transfer', conditionAnswers: { institution_name: '尚未核实' } };
   const questions = researchQuestions([], input);

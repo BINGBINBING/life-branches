@@ -43,6 +43,7 @@ export type IntakePlan = {
   generatedBy?: string;
 };
 export type Source = {
+  contentBasis?: 'search_excerpt';
   id: string;
   title: string;
   url: string;
