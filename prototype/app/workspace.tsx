@@ -205,11 +205,16 @@ function ExperienceCard({
         </div>
       </div>
       {item.conditionComparisons?.length ? (
-        <section className="condition-comparisons">
-          <div className="comparison-label">
+        <div>
+          {item.conditionComparisons.filter((condition) => condition.status === 'different').slice(0, 2).map((condition) => (
+            <p key={condition.conditionId}><strong>{condition.label}：</strong>{condition.text}</p>
+          ))}
+        <details className="condition-comparisons">
+          <summary className="comparison-label">
             <SlidersHorizontal size={15} />
-            <strong>逐项条件对照</strong>
-          </div>
+            <strong>展开 {item.conditionComparisons.length} 项条件对照</strong>
+            <ChevronDown size={15} />
+          </summary>
           {item.conditionComparisons.map((condition) => (
             <div
               className="condition-comparison-row"
@@ -245,7 +250,8 @@ function ExperienceCard({
               </details>
             </div>
           ))}
-        </section>
+        </details>
+        </div>
       ) : (
         <div className={`comparison ${item.comparison.status}`}>
           <div className="comparison-label">
