@@ -9,6 +9,19 @@ import {
 const validQuote = (source, quote) =>
   source.snippets.some((text) => text.includes(quote)) ? quote : '';
 
+test('negative outcome text cannot pass as a successful stage', () => {
+  const quote = '我未通过转专业考核';
+  const source = { snippets: [quote] };
+  assert.equal(validateOutcomeStage(source, { stageId: 'assessment_passed', quote }, 'major_transition', validQuote), null);
+  assert.equal(discoverOutcomeStage(source, 'major_transition', validQuote)?.id, 'assessment_failed');
+});
+
+test('an invalid early clause cannot shadow a later valid stage', () => {
+  const source = { snippets: ['我计划拿到开发offer。我后来拿到了开发offer。'] };
+  assert.equal(discoverOutcomeStage(source, 'career_transition', validQuote)?.id, 'offer_received');
+  assert.equal(discoverOutcomeStage(source, 'career_transition', validQuote)?.quote, '我后来拿到了开发offer');
+});
+
 test('stage catalogues separate major and career milestones', () => {
   const major = stageCatalogue('major_transition').map((item) => item.id);
   const career = stageCatalogue('career_transition').map((item) => item.id);

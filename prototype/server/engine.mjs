@@ -687,12 +687,13 @@ export function validateAnalysis(raw, sources, profile) {
         evidence,
       );
       const stage =
+        discoverOutcomeStage(source, profile.decisionScope, evidence) ||
         validateOutcomeStage(
           source,
           item.outcomeStage,
           profile.decisionScope,
           evidence,
-        ) || discoverOutcomeStage(source, profile.decisionScope, evidence);
+        );
       const classification = classifyContent(action.quote, source.snippets);
       if (classification.kind === 'advice') {
         rejected++;

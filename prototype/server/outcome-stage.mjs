@@ -114,6 +114,7 @@ export function validateOutcomeStage(source, raw, scope, validQuote) {
     !/(?:入职|任职|工作|岗位|转岗|成为.{0,8}工程师)/.test(quote);
   if (
     !quote ||
+    (stage.result === 'success' && /未通过|没通过|没有|没能|未能|不符合|不具备|未获批|未入职|未转入/.test(quote)) ||
     downstreamMajorResult ||
     learningOnly ||
     /(?:想|希望|计划|准备|目标|如何|怎么|如果|为了).{0,12}(?:入职|进入|转入|转到|获得|通过|拿到)/.test(
@@ -174,20 +175,16 @@ export function discoverOutcomeStage(source, scope, validQuote) {
     .filter((text) => text.length >= 5 && text.length <= 700);
   const found = [];
   for (const stage of OUTCOME_STAGES[scope] || []) {
-    const quote = clauses.find((clause) => stage.pattern.test(clause));
-    if (quote) found.push({ stage, quote });
+    for (const quote of clauses) {
+      if (!stage.pattern.test(quote)) continue;
+      const validated = validateOutcomeStage(source, { stageId: stage.id, quote }, scope, validQuote);
+      if (validated) found.push({ stage, validated });
+    }
   }
   found.sort(
     (a, b) =>
       stagePriority.indexOf(a.stage.id) - stagePriority.indexOf(b.stage.id),
   );
   const match = found[0];
-  return match
-    ? validateOutcomeStage(
-        source,
-        { stageId: match.stage.id, quote: match.quote },
-        scope,
-        validQuote,
-      )
-    : null;
+  return match?.validated || null;
 }
