@@ -1,5 +1,6 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { conditionHistory } from './condition-history.mjs';
+import { createUsageGate } from './usage-gate.mjs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
@@ -91,6 +92,11 @@ export function localApi(options = {}) {
   const researchStore = createResearchStore(options.researchStorePath);
   const telemetry = createTelemetry(options.telemetryPath);
   const runtimeEnv = options.env || process.env;
+  const gate = createUsageGate({ file: options.budgetPath });
+  const reserve = (req, cost) => {
+    if (runtimeEnv.NODE_ENV === 'production')
+      gate.reserve(req.socket?.remoteAddress || 'unknown', cost);
+  };
   return {
     name: 'life-branches-local-api',
     configureServer(server) {
@@ -186,6 +192,8 @@ export function localApi(options = {}) {
               return send(res, 429, {
                 error: '已有条件表单正在生成，请稍后重试。',
               });
+            try { reserve(req, { searches: 0, models: 1 }); }
+            catch (error) { return send(res, 429, { error: error.message }); }
             intakeActive++;
             try {
               return send(res, 200, await createIntakePlan(input?.question));
@@ -409,6 +417,8 @@ export function localApi(options = {}) {
                   '今日所需的知乎额度已用尽。可查看历史样本，额度恢复后再开始实时探索。',
               });
           }
+          try { reserve(req, { searches: previous ? 0 : 5, models: previous ? 0 : 2 }); }
+          catch (error) { return send(res, 429, { error: error.message }); }
           const job = {
             id: randomUUID(),
             status: 'running',

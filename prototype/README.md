@@ -70,3 +70,17 @@ npm run build
 - 管理页面位于 `/admin`：概览指标、token 汇总、知乎实时额度、反馈列表与最近使用记录。管理密码读取 `ADMIN_PASSWORD`；仅开发环境未设置时回退 `life-branches-dev`，生产环境未设置则关闭管理接口。
 - 顶栏「开发者密钥」面板只在非生产环境且通过本机回环地址访问时开放，可临时注入知乎 Access Secret 与分析 AI Key；公网主机名访问时入口和接口均关闭。密钥仅存服务进程内存，刷新 / 重启即失效。
 - 存储实现见 `server/storage.mjs`；上云时替换为同接口的 KV/数据库实现，数据文件与密钥不进入仓库（`.local/`、`.env*` 均已忽略）。
+# Production Call Budget
+
+Production API requests (`NODE_ENV=production`) reserve worst-case calls before
+running: initial intake reserves one model call; new research reserves five
+search calls and two model calls; local rematching reserves no external calls.
+The daily UTC ceiling is 50 search calls and 100 model calls, with per-connection
+ceilings of 10 searches and 20 model calls and six requests per minute.
+Reservations are conservative and are not refunded after failure or cache hits.
+The ledger uses Node's built-in SQLite in `.local/budget.sqlite`, requiring the
+declared Node runtime and a persistent writable local volume. Processes sharing
+that file share its transactional limit; independent hosts do not share a budget.
+Client identity uses the socket address, not untrusted forwarded headers. Behind
+a reverse proxy, users may consequently share the connection-level limit.
+Development remains unrestricted by this gate. Do not publish the database.
