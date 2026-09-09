@@ -391,3 +391,19 @@ test('model suggestions cannot displace core questions before the first search',
   assert.ok(plan.fields.some((field) => field.id === 'target_job_function'));
   assert.ok(plan.fields.filter((field) => !field.initialValue).length <= 6);
 });
+
+test('local fallback recognizes explicit transfer destinations and current education', () => {
+  for (const verb of ['转入', '转成', '转到']) {
+    const plan = normalizeIntake(`我想从机械专业${verb}计算机专业`);
+    assert.equal(plan.supported, true);
+    assert.equal(plan.scope, 'major_transition');
+    assert.equal(plan.path, 'campus_transfer');
+    assert.equal(plan.fields.find((field) => field.id === 'current_major')?.initialValue, '机械');
+    assert.equal(plan.fields.find((field) => field.id === 'target_major')?.initialValue, '计算机');
+  }
+  const plan = normalizeIntake('我想转行，目标岗位要求本科，我目前是大专学历');
+  assert.equal(plan.fields.find((field) => field.id === 'current_education')?.initialValue, '大专');
+  for (const question of ['我想转行，朋友目前是大专学历', '我想转行，我计划成为本科毕业生']) {
+    assert.equal(normalizeIntake(question).fields.find((field) => field.id === 'current_education')?.initialValue, undefined);
+  }
+});

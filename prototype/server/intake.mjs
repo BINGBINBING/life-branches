@@ -142,6 +142,8 @@ function catalogue() {
 }
 
 function inferredScope(question) {
+  if (/(?:转入|转成)[^，。；！？\n]{1,12}专业/.test(question))
+    return 'major_transition';
   if (
     /\u8f6c\u4e13\u4e1a|\u8de8\u4e13\u4e1a|\u8de8\u8003|\u8f85\u4fee|\u4e8c\u5b66\u4f4d|\u7b2c\u4e8c\u5b66\u58eb|\u8f6c\u5230.{0,12}\u4e13\u4e1a/.test(
       question,
@@ -279,7 +281,7 @@ function prefillClause(question, id) {
   }
   if (id === 'current_education') {
     const quote = question.match(
-      /(?:我是|本人|目前学历(?:是|为)?|学历(?:是|为)?)[^，。]{0,6}(?:博士|硕士|研究生|本科|学士|大专|专科|高中|中专)/,
+      /(?:我(?:目前|现在)?是|本人|目前学历(?:是|为)?|学历(?:是|为)?)[^，。]{0,6}(?:博士|硕士|研究生|本科|学士|大专|专科|高中|中专)/,
     )?.[0];
     const parsed =
       quote && hasFieldMeaning(id, quote, quote) && parseUserCondition(id, quote);
