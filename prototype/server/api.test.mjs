@@ -310,7 +310,7 @@ test('search separates a focused evidence query from a setback query', () => {
     },
   });
   assert.equal(queries.length, 5);
-  assert.match(queries[0], /行业与职能同时变化/);
+  assert.match(queries[0], /转行 转岗/);
   assert.match(queries[0], /零售/);
   assert.doesNotMatch(queries[0], /每天两小时/);
   assert.match(queries[1], /失败 被拒 后悔 复盘/);
@@ -337,6 +337,16 @@ test('search queries exclude the full personal narrative and stay concise', () =
   assert.ok(queries.every((query) => !query.includes(privateNarrative)));
   assert.match(queries[0], /零售/);
   assert.match(queries[0], /开发/);
+});
+
+test('incomplete industry classification never leaks internal status into search terms', () => {
+  const queries = searchQueries({ decisionScope: 'career_transition', conditionAnswers: {
+    current_job_function: '运营', target_job_function: '软件开发',
+  } });
+  for (const query of queries) {
+    assert.match(query, /转行 转岗 从运营转向软件开发/);
+    assert.doesNotMatch(query, /待确认|当前岗位职能|目标岗位职能|行业与职能变化/);
+  }
 });
 
 test('all four academic routes enter the focused search query', () => {

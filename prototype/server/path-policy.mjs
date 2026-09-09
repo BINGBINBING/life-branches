@@ -152,5 +152,12 @@ export function decisionPathTerm(profile) {
   if (profile.decisionScope === 'major_transition')
     return (majorRoutes[profile.decisionPath] || majorRoutes.campus_transfer)
       .label;
-  return classifyCareerMove(profile).label;
+  const terms = {
+    same_industry_role_change: '同行业转岗',
+    cross_industry_same_function: '跨行业 同岗位 转行',
+    cross_industry_role_change: '转行 转岗',
+    same_role: '换工作',
+    unknown: '转行 转岗',
+  };
+  return terms[classifyCareerMove(profile).id];
 }

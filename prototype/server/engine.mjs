@@ -409,7 +409,7 @@ export function searchQueries(profile) {
           'target_industry',
           'target_job_function',
         ];
-  const formContext = Object.entries(profile.conditionAnswers || {})
+  const conciseConditions = Object.entries(profile.conditionAnswers || {})
     .filter(([id]) => hardConditionIds.includes(id))
     .filter(([, answer]) => !/^(?:未知|尚未核实|不清楚|不知道|待确认)$/.test(String(answer).trim()))
     .slice(0, 4)
@@ -419,8 +419,17 @@ export function searchQueries(profile) {
         .replace(/\s+/g, ' ')
         .trim()
         .slice(0, 40);
-      return item && conciseAnswer ? `${item.label} ${conciseAnswer}` : '';
+      return item && conciseAnswer ? { id, value: conciseAnswer } : null;
     })
+    .filter(Boolean);
+  const conditionValue = (id) => conciseConditions.find((item) => item.id === id)?.value || '';
+  const currentRole = conditionValue('current_job_function');
+  const targetRole = conditionValue('target_job_function');
+  const roleDirection = currentRole && targetRole
+    ? `从${currentRole}转向${targetRole}` : targetRole ? `转向${targetRole}` : currentRole;
+  const formContext = (profile.decisionScope === 'career_transition'
+    ? [roleDirection, conditionValue('current_industry'), conditionValue('target_industry')]
+    : conciseConditions.map((item) => item.value))
     .filter(Boolean)
     .join(' ')
     .slice(0, 180);
