@@ -347,3 +347,20 @@ test('rejected AI candidates do not hide a valid fact after position twelve', ()
   });
   assert.equal(plan.fields.find((field) => field.id === 'target_job_function')?.initialValue, '开发');
 });
+
+test('local and AI prefills reject third-party and requirement context', () => {
+  for (const [question, conditionId, value, quote] of [
+    ['我想转行，朋友每天学习8小时', 'daily_time', '8小时', '每天学习8小时'],
+    ['我想转专业，同学现在大二', 'current_stage', '大二', '大二'],
+    ['我想转专业，学校要求GPA3.6', 'gpa_value', '3.6', 'GPA3.6'],
+    ['我想转行，同事目前做运营', 'current_job_function', '运营', '运营'],
+    ['我想转行，如果每天学习8小时', 'daily_time', '8小时', '每天学习8小时'],
+  ]) {
+    const plan = normalizeIntake(question, { fieldIds: [conditionId], extracted: [{ conditionId, value, quote }] });
+    assert.equal(plan.fields.find((field) => field.id === conditionId)?.initialValue, undefined, question);
+  }
+  const personal = normalizeIntake('我想转行，朋友每天学习8小时，我每天学习2小时');
+  assert.equal(personal.fields.find((field) => field.id === 'daily_time')?.initialValue, '2小时/天');
+  const conflicting = normalizeIntake('我想转行，每天学习2小时，每天学习8小时');
+  assert.equal(conflicting.fields.find((field) => field.id === 'daily_time')?.initialValue, undefined);
+});

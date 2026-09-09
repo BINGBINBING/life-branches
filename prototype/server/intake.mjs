@@ -23,6 +23,15 @@ const typedPrefillIds = new Set([
   'rank_position',
 ]);
 
+function personalClause(text) {
+  return !/朋友|同学|同事|案例|博主|作者|别人|他(?:是|在|每天|每周)|她(?:是|在|每天|每周)|要求|假如|假设|如果|比如|例如/.test(text);
+}
+
+function personalQuote(question, quote) {
+  const contexts = question.split(/[，。；！？\n]/).filter((clause) => clause.includes(quote));
+  return contexts.length ? contexts.every(personalClause) : personalClause(question);
+}
+
 function hasFieldMeaning(id, value, quote) {
   if (/^(?:未知|不清楚|不知道|待确认|尚未核实)$/.test(value)) return false;
   if (id === 'current_job_function' || id === 'target_job_function') {
@@ -203,6 +212,7 @@ function extractedPrefills(question, raw, candidates) {
       !quote.toLowerCase().includes(value.toLowerCase())
     )
       continue;
+    if ((typedPrefillIds.has(id) || id.startsWith('current_')) && !personalQuote(question, quote)) continue;
     if (!hasFieldMeaning(id, value, quote)) continue;
     values.set(id, { initialValue: value, initialQuote: quote });
   }
@@ -210,6 +220,13 @@ function extractedPrefills(question, raw, candidates) {
 }
 
 function prefill(question, id) {
+  const candidates = question.split(/[，。；！？\n]/).filter(personalClause)
+    .map((clause) => prefillClause(clause, id)).filter((item) => item.initialValue);
+  const values = new Set(candidates.map((item) => item.initialValue));
+  return values.size === 1 ? candidates[0] : {};
+}
+
+function prefillClause(question, id) {
   if (id === 'gpa_value') {
     const match = question.match(/(?:绩点|GPA)\s*(\d+(?:\.\d+)?)/i);
     if (match && parseSourceCondition(id, question))
