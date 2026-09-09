@@ -1,4 +1,5 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { conditionHistory } from './condition-history.mjs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
@@ -415,6 +416,7 @@ export function localApi(options = {}) {
             createdAt: Date.now(),
             profile,
             sources: previous?.sources || [],
+            conditionHistory: conditionHistory(previous, profile),
             officialSources: previous?.officialSources || [],
             officialAssessment: previous?.officialAssessment || null,
             result: null,

@@ -167,6 +167,13 @@ export type Analysis = {
   } | null;
 };
 export type Job = {
+  conditionHistory?: {
+    version: number; at: number; kind: string;
+    values: Record<string, string>;
+    changes: { id: string; label: string; before: string; after: string;
+      origin: 'initial' | 'basic' | 'evidence' | 'edit'; sourceId: string; quote: string;
+    }[];
+  }[];
   id: string;
   status: 'running' | 'done' | 'error';
   progress: string;

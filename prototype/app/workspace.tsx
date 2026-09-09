@@ -2285,6 +2285,23 @@ export default function Workspace() {
                       jobId={job?.id ?? null}
                       question={profile.question}
                     />
+                    {!!job?.conditionHistory?.length && (
+                      <details className="quote-details">
+                        <summary>条件修改记录 <ChevronDown size={13} /></summary>
+                        {job.conditionHistory.map((version) => (
+                          <section key={version.version}>
+                            <h3>第 {version.version} 版 · {version.kind === 'legacy' ? '历史基线' : version.kind === 'initial' ? '初始化' : '条件更新'}</h3>
+                            <p className="meta">{new Date(version.at).toLocaleString()}</p>
+                            {version.changes.map((change) => (
+                              <p key={change.id}>
+                                {change.label}：{change.before || '未填写'} → {change.after || '已清空'}
+                                <span className="meta">（{{ initial: '初始化提供', basic: '基础补问', evidence: '经历触发', edit: '主动修改' }[change.origin]}）</span>
+                              </p>
+                            ))}
+                          </section>
+                        ))}
+                      </details>
+                    )}
                   </aside>
                 </div>
               ) : (

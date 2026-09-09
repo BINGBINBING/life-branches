@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createResearchStore } from './research-store.mjs';
+import { conditionHistory } from './condition-history.mjs';
 
 function completedJob(question, conditions = {}) {
   return {
@@ -23,9 +24,9 @@ test('research records persist independent condition versions', async () => {
   const file = join(directory, 'records.json');
   try {
     const store = createResearchStore(file);
-    const first = await store.save(
-      completedJob('转行开发', { daily_time: '2小时' }),
-    );
+    const initial = completedJob('转行开发', { daily_time: '2小时' });
+    initial.conditionHistory = conditionHistory(null, initial.profile, 100);
+    const first = await store.save(initial);
     const second = await store.save(
       completedJob('转行开发', { daily_time: '8小时' }),
     );
@@ -34,6 +35,7 @@ test('research records persist independent condition versions', async () => {
     assert.equal(list[0].conditions[0].label, '稳定投入时间');
     assert.notEqual(first.id, second.id);
     assert.equal((await store.get(first.id)).job.profile.conditionAnswers.daily_time, '2小时');
+    assert.deepEqual((await createResearchStore(file).get(first.id)).job.conditionHistory, initial.conditionHistory);
     assert.equal((await store.get(second.id)).job.profile.conditionAnswers.daily_time, '8小时');
     assert.equal((await store.remove(first.id)), true);
     assert.equal((await store.list()).length, 1);
