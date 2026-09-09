@@ -277,6 +277,28 @@ function ExperienceCard({
   );
 }
 
+function DynamicConditionDialog({ open, onClose, children }: {
+  open: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = ref.current;
+    if (open && !dialog?.open) dialog?.showModal();
+    if (!open && dialog?.open) dialog.close();
+  }, [open]);
+  return (
+    <dialog ref={ref} className="profile-dialog" aria-labelledby="dynamic-title" onCancel={onClose}>
+      <div className="dialog-heading">
+        <h2 id="dynamic-title">补充本次研究的条件</h2>
+        <button type="button" onClick={onClose}>稍后处理</button>
+      </div>
+      {children}
+    </dialog>
+  );
+}
+
 function DynamicConditionForm({
   questions,
   onSubmit,
@@ -938,6 +960,7 @@ export default function Workspace() {
   const [filter, setFilter] = useState('all');
   const [focus, setFocus] = useState('');
   const [editing, setEditing] = useState(false);
+  const [dynamicOpen, setDynamicOpen] = useState(false);
   const [records, setRecords] = useState<ResearchSummary[]>([]);
   const [savedRecordId, setSavedRecordId] = useState('');
   const [availability, setAvailability] = useState<{
@@ -1242,6 +1265,7 @@ export default function Workspace() {
       setError('');
       setStep('explore');
       setEditing(false);
+      setDynamicOpen(false);
       setProfile(nextProfile);
       setJob(null);
       setSavedRecordId('');
@@ -1263,6 +1287,8 @@ export default function Workspace() {
           );
           setJob(current);
           if (current.status !== 'running') {
+            if (current.status === 'done' && current.result?.questions.length)
+              setDynamicOpen(true);
             if (current.error) setError(current.error);
             setPathId(current.result?.paths[0]?.id || '');
             // 探索成功即保存快照到浏览器本地，便于之后回看。
@@ -2233,31 +2259,9 @@ export default function Workspace() {
                       针对当前来源逐项补充，只更新相关条件对照；不重新搜索，也不调用 DeepSeek。
                     </p>
                     {questions.length ? (
-                      <DynamicConditionForm
-                        questions={questions}
-                        onSource={jump}
-                        onSubmit={(answers, skipped) => {
-                          const conditionAnswers = {
-                            ...profile.conditionAnswers,
-                          };
-                          for (const question of questions) {
-                            const answer = answers[question.question]?.trim();
-                            if (answer && question.conditionId)
-                              conditionAnswers[question.conditionId] = answer;
-                          }
-                          void explore(
-                            {
-                              ...profile,
-                              conditionAnswers,
-                              answers: { ...profile.answers, ...answers },
-                              skipped: [
-                                ...new Set([...profile.skipped, ...skipped]),
-                              ],
-                            },
-                            job?.id,
-                          );
-                        }}
-                      />
+                      <button type="button" className="primary" onClick={() => setDynamicOpen(true)}>
+                        补充 {questions.length} 项条件 <ArrowRight size={15} />
+                      </button>
                     ) : (
                       <div className="no-questions">
                         <CheckCircle2 size={22} />
@@ -2513,6 +2517,28 @@ export default function Workspace() {
           }
           showFreeNote={questions.length === 0}
         />
+      )}
+      {job?.status === 'done' && questions.length > 0 && (
+        <DynamicConditionDialog open={dynamicOpen} onClose={() => setDynamicOpen(false)}>
+          <DynamicConditionForm key={job.id} questions={questions}
+            onSource={(sourceId) => {
+              setDynamicOpen(false);
+              const item = paths.flatMap((p) => p.cases).find((c) => c.sourceId === sourceId);
+              if (item) jump(item.id);
+            }}
+            onSubmit={(answers, skipped) => {
+              const conditionAnswers = { ...profile.conditionAnswers };
+              for (const question of questions) {
+                const answer = answers[question.question]?.trim();
+                if (answer && question.conditionId) conditionAnswers[question.conditionId] = answer;
+              }
+              void explore({ ...profile, conditionAnswers,
+                answers: { ...profile.answers, ...answers },
+                skipped: [...new Set([...profile.skipped, ...skipped])],
+              }, job.id);
+            }}
+          />
+        </DynamicConditionDialog>
       )}
       {showHistory && (
         <HistoryDialog
