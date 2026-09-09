@@ -309,21 +309,22 @@ function DynamicConditionForm({
         return (
           <fieldset className="followup" key={question.question}>
             <legend>{question.question}</legend>
+            <p className="meta">{question.origin === 'basic' ? '基础条件待补齐' : '经历证据触发'}</p>
             <p>{question.reason}</p>
-            <details className="quote-details">
+            {question.origin !== 'basic' && <details className="quote-details">
               <summary>触发这次补问的原文 <ChevronDown size={13} /></summary>
               <blockquote>{question.quote}</blockquote>
-            </details>
+            </details>}
             <p className="meta">
               回答后会更新已有经历中这一条件的对照及相关提示；暂不回答则保持待确认。本次更新不重新搜索或调用分析模型。
             </p>
-            <button
+            {question.origin !== 'basic' && <button
               type="button"
               className="text-button"
               onClick={() => onSource(question.sourceId)}
             >
               查看相关经历 <ArrowUpRight size={14} />
-            </button>
+            </button>}
             <div className="answer-options">
               {question.options.map((option) => (
                 <button

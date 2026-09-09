@@ -131,6 +131,7 @@ export type Insight = {
   applicability: string;
 };
 export type Question = {
+  origin?: 'basic' | 'evidence';
   conditionId?: string;
   question: string;
   reason: string;

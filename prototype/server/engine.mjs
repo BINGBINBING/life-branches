@@ -288,12 +288,30 @@ const requiredConditions = {
 export function researchReadiness(profile) {
   const required = requiredConditions[profile.decisionPath] || [];
   const missingRequired = required.filter(
-    (id) => !profile.conditionAnswers?.[id]?.trim(),
+    (id) => !profile.conditionAnswers?.[id]?.trim() ||
+      /^(?:未知|尚未核实|不清楚|不知道|待确认)$/.test(profile.conditionAnswers[id].trim()),
   );
   return {
     researchMode: missingRequired.length ? 'general' : 'personalized',
     missingRequired,
   };
+}
+
+export function researchQuestions(candidates, profile) {
+  const basic = researchReadiness(profile).missingRequired.flatMap((id) => {
+    const condition = dictionaryIndex.get(id);
+    if (!condition || (profile.skipped || []).includes(condition.question)) return [];
+    return [{
+      conditionId: id,
+      question: condition.question,
+      reason: `你的“${condition.label}”尚未确认，这是本次选择的基础条件，不是从案例推断出的个人信息。`,
+      origin: 'basic', sourceId: '', quote: '', options: [],
+    }];
+  });
+  return selectDynamicQuestions([
+    ...basic,
+    ...candidates.map((item) => ({ ...item, origin: 'evidence' })),
+  ]);
 }
 
 export function validProfile(input) {
@@ -721,7 +739,7 @@ export function validateAnalysis(raw, sources, profile) {
   return {
     paths,
     insights: decisionInsights,
-    questions: selectDynamicQuestions(questions),
+    questions: researchQuestions(questions, profile),
     rejected,
     rejectionReasons,
     citationPassRate: citationAttempts
@@ -787,7 +805,7 @@ export function rematchAnalysis(previous, sources, profile) {
     ...previous,
     paths,
     insights: buildDecisionInsights(paths, previous.insights || []),
-    questions: selectDynamicQuestions(questions),
+    questions: researchQuestions(questions, profile),
     analyzedAt: Date.now(),
     decisionClassification:
       profile.decisionScope === 'career_transition'

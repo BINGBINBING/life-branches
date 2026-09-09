@@ -7,9 +7,25 @@ import {
   parseModel,
   validateAnalysis,
   validProfile,
+  researchQuestions,
 } from './engine.mjs';
 
 const profile = validProfile({ question: '在职转行开发', time: '每天两小时' });
+
+test('missing basics generate questions without fabricated evidence', () => {
+  const input = { decisionPath: 'campus_transfer', conditionAnswers: { institution_name: '尚未核实' } };
+  const questions = researchQuestions([], input);
+  assert.deepEqual(questions.map((q) => q.conditionId), ['institution_name', 'current_major', 'target_major']);
+  assert.ok(questions.every((q) => q.origin === 'basic' && !q.quote && !q.sourceId));
+  const evidence = { conditionId: 'daily_time', question: '每天多久？', quote: '每天两小时', sourceId: 'S1', options: [] };
+  const combined = researchQuestions([evidence], input);
+  assert.equal(combined.at(-1).origin, 'evidence');
+  assert.equal(combined.at(-1).sourceId, 'S1');
+  assert.equal(researchQuestions([], { ...input, skipped: questions.map((q) => q.question) }).length, 0);
+  assert.equal(researchQuestions([], {
+    ...input, conditionAnswers: { institution_name: '示例大学', current_major: '机械', target_major: '中文' },
+  }).length, 0);
+});
 
 test('profile preserves all dictionary answers and validates entries after twelve', () => {
   const conditionAnswers = Object.fromEntries(

@@ -504,7 +504,9 @@ export function selectDynamicQuestions(candidates) {
     if (!unique.has(key)) unique.set(key, question);
   }
   return [...unique.values()]
-    .sort((a, b) => Number(criticalQuestions.has(b.conditionId)) - Number(criticalQuestions.has(a.conditionId)))
+    .sort((a, b) =>
+      Number(b.origin === 'basic') - Number(a.origin === 'basic') ||
+      Number(criticalQuestions.has(b.conditionId)) - Number(criticalQuestions.has(a.conditionId)))
     .slice(0, DYNAMIC_QUESTION_LIMIT);
 }
 
