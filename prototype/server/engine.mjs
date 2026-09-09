@@ -493,6 +493,7 @@ export async function search(
   progress,
   onSources = () => {},
   onMetric = () => {},
+  options = {},
 ) {
   const results = [];
   const queries = searchQueries(profile);
@@ -583,7 +584,8 @@ export async function search(
     onSources(currentSources);
     if (index === 0)
       queries[1] = adaptiveFollowupQuery(profile, currentSources);
-    const stopReason = searchStopReason(sourceCounts, SEARCH_CALL_LIMIT);
+    const stopReason = searchStopReason(sourceCounts, SEARCH_CALL_LIMIT) ||
+      (index === 2 && options.onCheckpoint ? await options.onCheckpoint(currentSources) : '');
     if (stopReason) {
       onMetric({ stage: 'search_stop', reason: stopReason, rounds: index + 1 });
       break;
@@ -907,7 +909,7 @@ questions只问来源里明确存在、用户尚未说明、能影响适用性�
 格式：{"paths":[{"name":"行动方式","cases":[{"sourceId":"S1","kind":"self或retold或advice或promotion","background":{"text":"背景概括","quote":"连续原文"},"action":{"text":"具体行动","quote":"连续原文"},"outcome":{"text":"阶段结果","quote":"连续原文"},"outcomeStage":{"stageId":"offer_received","quote":"阶段结果连续原文"},"result":"success或setback或mixed或unknown","conditionEvidence":[{"conditionId":"daily_time","quote":"案例连续原文"}],"comparison":{"text":"相似点或差异及其限制","status":"different","quote":"案例连续原文","userQuote":"用户连续原文"},"missing":["来源未写明的条件"]}]}],"insights":[{"type":"practice或risk","title":"简短标题","text":"具体解释与限制","sourceId":"S1","quote":"连续原文"}],"questions":[{"question":"用户条件问题","reason":"影响判断的原因","sourceId":"S1","quote":"连续原文","options":["选项1","选项2"]}]}
 用户信息：${JSON.stringify({ ...profile, fullText: profileText(profile) })}
 给定来源：${JSON.stringify(supplied)}`;
-  const raw = await (options.ask || ask)(
+  const raw = options.preloadedRaw || await (options.ask || ask)(
     prompt +
       '\n推广处理覆盖规则：不要仅凭认证、机构身份或疑似推广剔除来源；保留有行动引文的相关来源，内容性质交由后续审核。不要输出未经证实的作者属性。' +
       '\n额外约束：完成项目或部署不等于成功就业；电子信息专业不等于有编程基础。result 的 success 必须由目标阶段的明确成果支持。路径名称不允许加入未经原文确认的在职/脱产状态。missing 不得询问是否愿意伪造经验等不诚信行为。',
@@ -916,7 +918,9 @@ questions只问来源里明确存在、用户尚未说明、能影响适用性�
   progress('正在逐条检查引用是否存在于原始片段…');
   const result = validateAnalysis(raw.value, sources, profile);
   progress('正在复核总结是否忠于原文…');
-  const summaryReview = await reviewSummaries(result, raw.value, sources, options.ask || ask);
+  const summaryReview = options.deferSummaryReview
+    ? { calls: 0, status: 'deferred' }
+    : await reviewSummaries(result, raw.value, sources, options.ask || ask);
   result.insights = buildDecisionInsights(result.paths, result.insights).map((insight) =>
     profile.researchMode === 'general' ? { ...insight, applicability: '必需条件尚未补齐，仅作通用经验参考，不判断个人适用性。' } : insight);
   const usage = { ...raw.metadata?.usage };

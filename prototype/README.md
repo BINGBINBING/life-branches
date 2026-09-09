@@ -107,7 +107,15 @@ and its deletion-restoration caveat. No offsite schedule is configured.
 
 Production API requests (`NODE_ENV=production`) reserve worst-case calls before
 running: initial intake reserves one model call; new research reserves five
-search calls and two model calls; local rematching reserves no external calls.
+search calls and three model calls; local rematching reserves no external calls.
+After round three, personalized research with at least four independent sources
+may perform an extraction-only checkpoint. Early stopping requires at least four
+validated cases across two action branches, positive and setback stage evidence,
+and at least one comparable condition per case. This is a sample coverage target,
+not proof of exhaustive evidence or certainty. If coverage is insufficient,
+search continues up to five rounds. Unchanged sources reuse the checkpoint;
+changed sources get a final extraction. One summary review follows, giving a
+maximum of three model calls (checkpoint, final extraction, review), no retries.
 The daily UTC ceiling is 50 search calls and 100 model calls, with per-connection
 ceilings of 10 searches and 20 model calls and six requests per minute.
 Reservations are conservative and are not refunded after failure or cache hits.

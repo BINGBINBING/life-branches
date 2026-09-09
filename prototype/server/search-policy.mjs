@@ -1,3 +1,15 @@
+import { researchReadiness } from './research-readiness.mjs';
+
+export function verifiedCoverageReached(result, profile) {
+  if (researchReadiness(profile).researchMode !== 'personalized') return false;
+  const paths = (result?.paths || []).filter((path) => path.cases?.length);
+  const cases = paths.flatMap((path) => path.cases);
+  if (paths.length < 2 || new Set(cases.map((item) => item.sourceId)).size < 4) return false;
+  if (!cases.some((item) => item.stage?.result === 'success') || !cases.some((item) => item.stage?.result === 'setback')) return false;
+  return cases.every((item) => item.stage?.quote && item.action?.quote &&
+    item.conditionComparisons?.some((comparison) => ['similar', 'different'].includes(comparison.status)));
+}
+
 export function searchStopReason(counts, limit = 5) {
   if (counts.length >= limit) return '已达到本次搜索轮数上限；未找到的经历不代表不存在。';
   if (counts.length >= 3 && counts.at(-1) === counts.at(-2) && counts.at(-2) === counts.at(-3))

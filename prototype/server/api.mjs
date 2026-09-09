@@ -5,15 +5,15 @@ import { createUsageGate } from './usage-gate.mjs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
-  analyze,
   rematchAnalysis,
-  search,
   validProfile,
   validateAnalysis,
   setTempCredential,
   summaryCredentialStatus,
   zhihuBackendQuota,
 } from './engine.mjs';
+import { runResearch } from './research-runner.mjs';
+import { CALL_BUDGET } from './evidence-policy.mjs';
 import { curatedArchive } from './archive-annotations.mjs';
 import { fetchOfficialSources } from './official-source.mjs';
 import { buildOfficialAssessment } from './official-assessment.mjs';
@@ -442,7 +442,7 @@ export function localApi(options = {}) {
                   '今日所需的知乎额度已用尽。可查看历史样本，额度恢复后再开始实时探索。',
               });
           }
-          try { reserve(req, { searches: previous ? 0 : 5, models: previous ? 0 : 2 }); }
+          try { reserve(req, { searches: previous ? 0 : CALL_BUDGET.search, models: previous ? 0 : CALL_BUDGET.analysis }); }
           catch (error) { return send(res, 429, { error: error.message }); }
           const job = {
             id: randomUUID(),
@@ -477,6 +477,7 @@ export function localApi(options = {}) {
               });
             };
             try {
+              let analysisElapsedMs = 0;
               if (!previous) {
                 job.progress = '正在读取你提供的官方通知…';
                 const officialStarted = Date.now();
@@ -491,7 +492,7 @@ export function localApi(options = {}) {
                   job.officialSources,
                   profile,
                 );
-                job.sources = await search(
+                const research = await runResearch(
                   profile,
                   (message) => {
                     job.progress = message;
@@ -501,6 +502,9 @@ export function localApi(options = {}) {
                   },
                   recordMetric,
                 );
+                job.sources = research.sources;
+                job.result = research.result;
+                analysisElapsedMs = research.analysisElapsedMs;
               }
               if (previous)
                 job.officialAssessment = buildOfficialAssessment(
@@ -508,15 +512,11 @@ export function localApi(options = {}) {
                   profile,
                 );
               const analysisStarted = Date.now();
-              job.result = previous
-                ? rematchAnalysis(previous.result, job.sources, profile)
-                : await analyze(job.sources, profile, (message) => {
-                    job.progress = message;
-                  });
+              if (previous) job.result = rematchAnalysis(previous.result, job.sources, profile);
               recordMetric({
                 stage: 'analysis',
                 status: 'ok',
-                elapsedMs: Date.now() - analysisStarted,
+                elapsedMs: previous ? Date.now() - analysisStarted : analysisElapsedMs,
                 provider: job.result.analysis?.provider || analysisProvider(),
                 model: job.result.analysis?.model || 'none',
                 ruleVersion: job.result.ruleVersion || 'unknown',

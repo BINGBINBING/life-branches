@@ -1,7 +1,7 @@
 export const RULE_VERSION = 'evidence-3';
 export const CALL_BUDGET = Object.freeze({
   intake: 1,
-  analysis: 2,
+  analysis: 3,
   retries: 0,
   search: 5,
 });
