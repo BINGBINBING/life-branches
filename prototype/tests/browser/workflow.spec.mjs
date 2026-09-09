@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { normalizeIntake } from '../../server/intake.mjs';
-import { validateAnalysis, validProfile } from '../../server/engine.mjs';
+import { analyze, validateAnalysis, validProfile } from '../../server/engine.mjs';
 
 const question = '我想校内转专业，从机械专业转入计算机专业，目前大一';
 const profile = validProfile({ question, decisionScope: 'major_transition', decisionPath: 'campus_transfer' });
@@ -18,9 +18,69 @@ async function assertFits(page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
   const clipped = await page.locator('button:visible, input:visible, textarea:visible, select:visible').evaluateAll((elements) => elements.filter((element) => {
     const box = element.getBoundingClientRect();
+    // Horizontally scrollable navigation may intentionally contain offscreen items.
+    for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+      if (['auto', 'scroll'].includes(getComputedStyle(parent).overflowX)) {
+        const container = parent.getBoundingClientRect();
+        if (container.left >= 0 && container.right <= window.innerWidth && box.width <= container.width) return false;
+      }
+    }
     return box.width > window.innerWidth + 1 || box.left < -1 || box.right > window.innerWidth + 1;
   }).map((element) => element.textContent || element.getAttribute('aria-label')));
   expect(clipped).toEqual([]);
+}
+
+for (const width of [1440, 360]) {
+  test(`action branches and reviewed evidence remain distinct at ${width}px`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    const second = { ...source, id: 'S2', title: '虚构申请材料经历', url: 'https://www.zhihu.com/question/1/answer/2',
+      snippets: ['我整理并提交了转专业申请材料，最终转专业申请获批'] };
+    const candidates = structuredClone(raw);
+    candidates.paths[0].cases.push({ sourceId: 'S2', action: {
+      text: '整理并提交申请材料', quote: '我整理并提交了转专业申请材料',
+    } });
+    let calls = 0;
+    const result = await analyze([source, second], profile, () => {}, { ask: async (prompt) => {
+      if (++calls === 1) return { value: candidates };
+      const items = JSON.parse(prompt.slice(prompt.indexOf('\n') + 1));
+      return { value: { reviews: items.map((item) => ({ id: item.id, supported: true })) } };
+    } });
+    expect(result.paths.length).toBe(2);
+    await page.route('**/api/branches/**', async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      await route.fulfill({ json: path.endsWith('/health') ? { archive: false, developerTools: false }
+        : path.endsWith('/researches') ? { records: [] }
+        : path.endsWith('/intake') ? normalizeIntake(question)
+        : path.endsWith('/explore') ? { id: job.id }
+        : path.includes('/jobs/') ? { ...job, sources: [source, second], result } : {} });
+    });
+    const ready = page.waitForResponse((response) => response.url().endsWith('/api/branches/health'));
+    await page.goto('/');
+    await ready;
+    await page.getByRole('textbox').first().fill(question);
+    await page.getByRole('button', { name: '发送', exact: true }).click();
+    await page.getByRole('button', { name: '确认并搜索知乎' }).click();
+    const dialog = page.getByRole('dialog', { name: '补充本次研究的条件' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: '查看相关经历' }).first().click();
+    await expect(dialog).not.toBeVisible();
+    await expect(page.locator('article.experience.focused')).toHaveCount(1);
+    const navigation = page.getByRole('navigation', { name: '行动路径' });
+    await expect(navigation.getByRole('button')).toHaveCount(2);
+    await navigation.getByRole('button').nth(1).click();
+    const card = page.locator('article.experience');
+    await expect(card).toHaveCount(1);
+    await expect(card.getByRole('heading', { name: second.title })).toBeVisible();
+    await expect(card.getByText('整理并提交申请材料', { exact: true })).toBeVisible();
+    await expect(page.locator('.insight-grid').getByText('整理并提交申请材料', { exact: true })).toBeVisible();
+    await expect(card.getByText('AI 总结，已通过模型证据复核，仍需人工判断')).toBeVisible();
+    const evidence = card.locator('.experience-facts > div').nth(1);
+    await expect(evidence.locator('blockquote')).not.toBeVisible();
+    await evidence.locator('summary').click();
+    await expect(evidence.locator('blockquote')).toHaveText('我整理并提交了转专业申请材料');
+    await assertFits(page);
+    await page.screenshot({ path: info.outputPath('reviewed-evidence.png'), fullPage: true });
+  });
 }
 
 for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }, { width: 360, height: 800 }]) {
