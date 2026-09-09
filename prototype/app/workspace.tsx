@@ -2509,6 +2509,9 @@ export default function Workspace() {
               {!!job?.metrics?.stages.some((stage) => stage.stage === 'query_result') && (
                 <details className="sources-section">
                   <summary>本次查询记录 <ChevronDown size={16} /></summary>
+                  {job.metrics.stages.filter((stage) => stage.stage === 'search_stop').map((stage, index) => (
+                    <p className="meta" key={`stop-${index}`}>{String(stage.reason)}</p>
+                  ))}
                   {job.metrics.stages.filter((stage) => stage.stage === 'query_result').map((stage, index) => (
                     <section key={index}>
                       <h3>第 {String(stage.round)} 轮 · {String(stage.purpose)}</h3>

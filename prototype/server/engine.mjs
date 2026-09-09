@@ -4,6 +4,7 @@ import { homedir, platform } from 'node:os';
 import { win32, posix } from 'node:path';
 import { existsSync } from 'node:fs';
 import { deepseekJSON } from './deepseek.mjs';
+import { searchStopReason } from './search-policy.mjs';
 import { dictionaryIndex } from './condition-dictionary.mjs';
 import {
   COMPARABLE_CONDITIONS,
@@ -506,6 +507,7 @@ export async function search(
 ) {
   const results = [];
   const queries = searchQueries(profile);
+  const sourceCounts = [];
   // Stop immediately on quota/auth errors; don't fan out requests on a failing account.
   for (let index = 0; index < SEARCH_CALL_LIMIT; index++) {
     const query = queries[index];
@@ -582,6 +584,7 @@ export async function search(
       });
     results.push({ query, data: data.data });
     const currentSources = aggregate(results);
+    sourceCounts.push(currentSources.length);
     onMetric({
       stage: 'query_result', round: index + 1, query,
       purpose: ['行动路径与硬条件', '根据首轮缺口补充', '阶段结果', '限制与成本', '后续回顾'][index],
@@ -591,6 +594,11 @@ export async function search(
     onSources(currentSources);
     if (index === 0)
       queries[1] = adaptiveFollowupQuery(profile, currentSources);
+    const stopReason = searchStopReason(sourceCounts, SEARCH_CALL_LIMIT);
+    if (stopReason) {
+      onMetric({ stage: 'search_stop', reason: stopReason, rounds: index + 1 });
+      break;
+    }
   }
   return aggregate(results);
 }
