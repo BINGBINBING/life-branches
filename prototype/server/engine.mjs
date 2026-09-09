@@ -5,6 +5,7 @@ import { win32, posix } from 'node:path';
 import { existsSync } from 'node:fs';
 import { deepseekJSON } from './deepseek.mjs';
 import { searchStopReason } from './search-policy.mjs';
+import { markDuplicateSources } from './source-duplicates.mjs';
 import { dictionaryIndex } from './condition-dictionary.mjs';
 import {
   COMPARABLE_CONDITIONS,
@@ -407,7 +408,7 @@ export function aggregate(results) {
       if (item.AuthorName) source.author = limited(item.AuthorName, 80);
     }
   }
-  return [...sources.values()].slice(0, SOURCE_LIMIT);
+  return markDuplicateSources([...sources.values()].slice(0, SOURCE_LIMIT));
 }
 
 export function searchQueries(profile) {
@@ -646,6 +647,10 @@ export function validateAnalysis(raw, sources, profile) {
       if (acceptedCases.length + cases.length >= DETAILED_CASE_LIMIT) break;
       const source = byId.get(item.sourceId);
       if (!source || seen.has(source.id)) continue;
+      if (source.duplicateOf) {
+        sourceReasons.set(source.id, `与 ${source.duplicateOf} 内容重复，不作为独立案例`);
+        continue;
+      }
       if (!sourceMatchesDecisionPath(source, profile.decisionPath)) {
         sourceReasons.set(source.id, '与当前选择路径不符');
         rejected++;
@@ -762,7 +767,7 @@ export function validateAnalysis(raw, sources, profile) {
     sourceDispositions: sources.map((source) => ({
       sourceId: source.id,
       accepted: seen.has(source.id),
-      reason: seen.has(source.id) ? '已纳入详细案例' : sourceReasons.get(source.id) || '未入选详细分析；可能受案例数量限制或模型选择影响，具体内容价值尚未核实',
+      reason: seen.has(source.id) ? '已纳入详细案例' : source.duplicateOf ? `与 ${source.duplicateOf} 内容重复，不作为独立案例` : sourceReasons.get(source.id) || '未入选详细分析；可能受案例数量限制或模型选择影响，具体内容价值尚未核实',
     })),
     rejected,
     rejectionReasons,
@@ -859,7 +864,7 @@ export async function analyze(sources, profile, progress, options = {}) {
       analyzedAt: Date.now(),
     };
   progress('正在核对行动路径、经历结果与你的条件…');
-  const supplied = sources.map((s) => ({
+  const supplied = sources.filter((s) => !s.duplicateOf).map((s) => ({
     id: s.id,
     title: s.title,
     author: s.author,
