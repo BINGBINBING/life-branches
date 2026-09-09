@@ -113,6 +113,7 @@ function Evidence({ value }: { value: Fact | null }) {
   return (
     <>
       <p>{value.text}</p>
+      <p className="meta">{value.verification === 'model-reviewed' ? 'AI 总结，已通过模型证据复核，仍需人工判断' : '原文片段，总结尚未通过复核'}</p>
       <details className="quote-details">
         <summary>
           查看依据 <ChevronDown size={13} />

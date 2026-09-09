@@ -165,11 +165,13 @@ test('A09/A10 reuses sources and rematches locally without changing accepted cas
     },
   };
   const two = await analyze([source], profile, () => {}, options);
+  const callsBeforeRematch = calls;
   const eight = rematchAnalysis(two, [source], {
     ...profile,
     time: '每天八小时',
   });
-  assert.equal(calls, 1);
+  assert.equal(calls, 2);
+  assert.equal(calls, callsBeforeRematch);
   assert.equal(two.paths[0].cases[0].comparison.status, 'different');
   assert.equal(eight.paths[0].cases[0].comparison.status, 'similar');
   assert.equal(eight.analysis.calls, 0);

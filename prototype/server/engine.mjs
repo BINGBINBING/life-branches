@@ -7,6 +7,7 @@ import { deepseekJSON } from './deepseek.mjs';
 import { searchStopReason } from './search-policy.mjs';
 import { markDuplicateSources } from './source-duplicates.mjs';
 import { researchCoverage } from './research-coverage.mjs';
+import { reviewSummaries } from './summary-review.mjs';
 import { dictionaryIndex } from './condition-dictionary.mjs';
 import {
   COMPARABLE_CONDITIONS,
@@ -895,12 +896,20 @@ questions只问来源里明确存在、用户尚未说明、能影响适用性�
   );
   await options.onRaw?.(raw);
   progress('正在逐条检查引用是否存在于原始片段…');
+  const result = validateAnalysis(raw.value, sources, profile);
+  progress('正在复核总结是否忠于原文…');
+  const summaryReview = await reviewSummaries(result, raw.value, sources, options.ask || ask);
+  const usage = { ...raw.metadata?.usage };
+  for (const [key, value] of Object.entries(summaryReview.metadata?.usage || {}))
+    if (Number.isFinite(value)) usage[key] = (usage[key] || 0) + value;
   return {
-    ...validateAnalysis(raw.value, sources, profile),
+    ...result,
     analysis: {
       ...raw.metadata,
+      usage,
+      summaryReview,
       ruleVersion: RULE_VERSION,
-      calls: 1,
+      calls: 1 + summaryReview.calls,
       budget: CALL_BUDGET,
     },
   };
