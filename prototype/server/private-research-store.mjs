@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync } from 'node:fs';
+import { chmodSync, closeSync, mkdirSync, openSync, unlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { dictionaryIndex } from './condition-dictionary.mjs';
@@ -10,6 +10,7 @@ export function createPrivateResearchStore(file = join(process.cwd(), '.local', 
     if (!db) {
       mkdirSync(dirname(file), { recursive: true });
       db = new DatabaseSync(file);
+      chmodSync(file, 0o600);
       db.exec('PRAGMA busy_timeout=5000; PRAGMA secure_delete=ON; CREATE TABLE IF NOT EXISTS research (id TEXT PRIMARY KEY, owner TEXT NOT NULL, savedAt INTEGER NOT NULL, payload TEXT NOT NULL); CREATE INDEX IF NOT EXISTS research_owner ON research(owner);');
     }
     db.prepare('DELETE FROM research WHERE savedAt < ?').run(Date.now() - 30 * 86400000);
@@ -21,7 +22,12 @@ export function createPrivateResearchStore(file = join(process.cwd(), '.local', 
     return { id: row.id, savedAt: row.savedAt, question: profile.question, scope: profile.decisionScope || '',
       pathCount: job.result.paths.length, caseCount: job.result.paths.reduce((n, path) => n + path.cases.length, 0),
       conditionCount: Object.keys(profile.conditionAnswers || {}).length,
-      conditions: Object.entries(profile.conditionAnswers || {}).map(([id, value]) => ({ id, label: dictionaryIndex.get(id)?.label || id, value })),
+      conditions: [
+        profile.background && { id: 'background', label: '背景', value: profile.background },
+        profile.time && { id: 'time', label: '投入', value: profile.time },
+        profile.goal && { id: 'goal', label: '目标与限制', value: profile.goal },
+        ...Object.entries(profile.conditionAnswers || {}).map(([id, value]) => ({ id, label: dictionaryIndex.get(id)?.label || id, value })),
+      ].filter(Boolean),
     };
   }
   return {
@@ -45,6 +51,17 @@ export function createPrivateResearchStore(file = join(process.cwd(), '.local', 
       } catch (error) { store.exec('ROLLBACK'); throw error; }
     },
     async remove(id, owner) { return database().prepare('DELETE FROM research WHERE id=? AND owner=?').run(id, owner).changes > 0; },
+    async backup(destination) {
+      const store = database();
+      mkdirSync(dirname(destination), { recursive: true, mode: 0o700 });
+      closeSync(openSync(destination, 'wx', 0o600));
+      try {
+        store.prepare('VACUUM INTO ?').run(destination);
+      } catch (error) {
+        unlinkSync(destination);
+        throw error;
+      }
+    },
     close() { db?.close(); db = undefined; },
   };
 }

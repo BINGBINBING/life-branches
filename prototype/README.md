@@ -84,6 +84,26 @@ Deletion covers that research version, not browser history, shared search cache,
 feedback or operational logs. Offsite backup and restoration procedures remain a
 deployment requirement; no backup is uploaded by this code.
 
+### Private Research Backup
+
+The server-only store exposes `backup(destination)` using SQLite `VACUUM INTO`
+for a consistent snapshot. The destination must not exist; it is created with
+owner-only permissions. Expired versions are removed before the snapshot.
+From this directory:
+
+```sh
+node --input-type=module -e 'import {createPrivateResearchStore} from "./server/private-research-store.mjs"; const store=createPrivateResearchStore(); try { await store.backup(".local/backups/research-"+Date.now()+".sqlite"); } finally { store.close(); }'
+```
+
+For recovery, stop all production processes, preserve the existing database,
+and restore the snapshot as `.local/private-research.sqlite` with mode `600`
+before restarting. Existing session cookies are required to access the same
+records. Tests verify restoration, isolation, expiry and the 60-version ceiling
+using synthetic data. Snapshots contain private content: never commit them;
+restrict backup access and retention. Restoring an old snapshot can resurrect
+deleted records; reconcile deletion requests before serving it. This does not
+back up budgets, feedback, search cache or logs. No offsite schedule is configured.
+
 Production API requests (`NODE_ENV=production`) reserve worst-case calls before
 running: initial intake reserves one model call; new research reserves five
 search calls and two model calls; local rematching reserves no external calls.

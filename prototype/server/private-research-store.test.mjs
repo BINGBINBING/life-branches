@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, statSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createPrivateResearchStore } from './private-research-store.mjs';
@@ -20,4 +21,35 @@ test('private research persists across connections without cross-owner access', 
     assert.equal(await b.get(first.id, 'owner-a'), null);
     assert.ok(await a.get(second.id, 'owner-b'));
   } finally { a.close(); b.close(); rmSync(directory, { recursive: true, force: true }); }
+});
+
+test('private research backup restores retained records and refuses overwrite', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'research-backup-'));
+  const file = join(directory, 'research.sqlite');
+  const backup = join(directory, 'backup.sqlite');
+  const store = createPrivateResearchStore(file);
+  let restored;
+  try {
+    const job = { status: 'done', profile: { question: '虚构问题', background: '测试背景', time: '每天2小时', goal: '测试目标' }, result: { paths: [] } };
+    const first = await store.save(job, 'owner');
+    const expired = await store.save(job, 'owner');
+    const db = new DatabaseSync(file);
+    db.prepare('UPDATE research SET savedAt=? WHERE id=?').run(Date.now() - 31 * 86400000, expired.id);
+    db.close();
+    await store.backup(backup);
+    assert.equal(statSync(file).mode & 0o777, 0o600);
+    assert.equal(statSync(backup).mode & 0o777, 0o600);
+    await assert.rejects(store.backup(backup), { code: 'EEXIST' });
+    await store.remove(first.id, 'owner');
+    restored = createPrivateResearchStore(backup);
+    assert.deepEqual((await restored.get(first.id, 'owner')).job, job);
+    assert.equal(await restored.get(first.id, 'other-owner'), null);
+    assert.equal(await restored.get(expired.id, 'owner'), null);
+    assert.deepEqual((await restored.list('owner'))[0].conditions.map((item) => item.id), ['background', 'time', 'goal']);
+    for (let i = 0; i < 61; i++) await restored.save(job, 'owner');
+    assert.equal((await restored.list('owner')).length, 60);
+    assert.equal(await restored.get(first.id, 'owner'), null);
+  } finally {
+    store.close(); restored?.close(); rmSync(directory, { recursive: true, force: true });
+  }
 });
