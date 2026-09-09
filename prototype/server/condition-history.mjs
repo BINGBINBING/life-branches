@@ -6,6 +6,8 @@ function snapshot(profile) {
     time: profile.time || '',
     goal: profile.goal || '',
     ...profile.conditionAnswers,
+    ...Object.fromEntries(Object.entries(profile.answers || {}).map(([question, answer]) => [`answer:${question}`, answer])),
+    ...Object.fromEntries((profile.skipped || []).map((question) => [`skipped:${question}`, '已跳过'])),
   };
 }
 
@@ -23,13 +25,14 @@ export function conditionHistory(previous, profile, now = Date.now()) {
     .filter((id) => (before[id] || '') !== (values[id] || ''))
     .map((id) => {
       const question = previous?.result?.questions?.find((item) =>
-        item.conditionId === id &&
+        id === `answer:${item.question}` || id === `skipped:${item.question}` || (item.conditionId === id &&
         profile.answers?.[item.question] === values[id] &&
-        previous.profile.answers?.[item.question] !== values[id],
+        previous.profile.answers?.[item.question] !== values[id]),
       );
       return {
         id,
-        label: dictionaryIndex.get(id)?.label || { background: '背景', time: '投入', goal: '目标与限制' }[id] || id,
+        label: dictionaryIndex.get(id)?.label || { background: '背景', time: '投入', goal: '目标与限制' }[id] ||
+          (id.startsWith('answer:') ? `补充回答：${id.slice(7)}` : id.startsWith('skipped:') ? `跳过状态：${id.slice(8)}` : id),
         before: before[id] || '', after: values[id] || '',
         origin: !previous ? 'initial' : question ? question.origin || 'evidence' : 'edit',
         sourceId: question?.sourceId || '', quote: question?.quote || '',

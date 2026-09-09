@@ -32,3 +32,20 @@ test('legacy records get an honest baseline and basic followups keep no citation
   assert.equal(versions[1].changes[0].origin, 'basic');
   assert.equal(versions[1].changes[0].quote, '');
 });
+
+test('answer-only and skip-only changes create traceable versions', () => {
+  const profile = { conditionAnswers: {}, answers: {}, skipped: [] };
+  const previous = { profile, createdAt: 100, conditionHistory: conditionHistory(null, profile, 100),
+    result: { questions: [{ question: '能否接受降薪？', origin: 'evidence', sourceId: 'S1', quote: '我转行后收入下降' }] } };
+  const answered = conditionHistory(previous, { ...profile, answers: { '能否接受降薪？': '只能接受短期下降' } }, 200);
+  assert.equal(answered.length, 2);
+  assert.equal(answered[1].changes[0].label, '补充回答：能否接受降薪？');
+  assert.equal(answered[1].changes[0].sourceId, 'S1');
+  assert.equal(answered[1].values['answer:能否接受降薪？'], '只能接受短期下降');
+  const skipped = conditionHistory(previous, { ...profile, skipped: ['能否接受降薪？'] }, 300);
+  assert.equal(skipped.length, 2);
+  assert.equal(skipped[1].changes[0].after, '已跳过');
+  const resumed = conditionHistory({ ...previous, profile: { ...profile, skipped: ['能否接受降薪？'] }, conditionHistory: skipped }, profile, 400);
+  assert.equal(resumed[2].changes[0].before, '已跳过');
+  assert.equal(resumed[2].changes[0].after, '');
+});
