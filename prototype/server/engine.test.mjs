@@ -83,6 +83,16 @@ test('profile preserves all dictionary answers and validates entries after twelv
     assert.throws(() => validProfile({ question: '想转行做开发', conditionAnswers: malformed }), /条件表单内容无效/);
   }
 });
+
+test('multi-round followup answers and skips survive beyond twelve entries', () => {
+  const answers = Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`问题${i}`, `答案${i}`]));
+  const skipped = Array.from({ length: 18 }, (_, i) => `跳过${i}`);
+  const result = validProfile({ question: '转行开发', answers, skipped: [...skipped, skipped[0]] });
+  assert.deepEqual(result.answers, answers);
+  assert.deepEqual(result.skipped, skipped);
+  assert.throws(() => validProfile({ question: '转行开发', answers: { ...answers, invalid: 1 } }));
+  assert.throws(() => validProfile({ question: '转行开发', skipped: [...skipped, 1] }));
+});
 const sources = [
   {
     id: 'S1',

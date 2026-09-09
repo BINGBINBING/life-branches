@@ -365,14 +365,16 @@ export function validProfile(input) {
       : '';
   Object.assign(result, researchReadiness(result));
   result.answers = {};
-  for (const [q, a] of Object.entries(input.answers || {}).slice(0, 12)) {
-    if (typeof a !== 'string' || q.length > 200 || a.length > 400)
+  if (input.answers != null && (typeof input.answers !== 'object' || Array.isArray(input.answers)))
+    throw new Error('补充内容格式不正确。');
+  for (const [q, a] of Object.entries(input.answers || {})) {
+    if (typeof a !== 'string' || q.length > 200 || a.length > 400 || ['__proto__', 'constructor', 'prototype'].includes(q))
       throw new Error('补充内容过长。');
     result.answers[q] = a.trim();
   }
-  result.skipped = Array.isArray(input.skipped)
-    ? input.skipped.filter((x) => typeof x === 'string').slice(0, 12)
-    : [];
+  if (input.skipped != null && (!Array.isArray(input.skipped) || input.skipped.some((x) => typeof x !== 'string' || x.length > 200)))
+    throw new Error('跳过的问题格式不正确。');
+  result.skipped = [...new Set(input.skipped || [])];
   return result;
 }
 
