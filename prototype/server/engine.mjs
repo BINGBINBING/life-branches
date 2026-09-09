@@ -298,7 +298,7 @@ export function researchReadiness(profile) {
       /^(?:未知|尚未核实|不清楚|不知道|待确认)$/.test(profile.conditionAnswers[id].trim()),
   );
   return {
-    researchMode: missingRequired.length ? 'general' : 'personalized',
+    researchMode: !required.length || missingRequired.length ? 'general' : 'personalized',
     missingRequired,
   };
 }
@@ -806,11 +806,12 @@ export function rematchAnalysis(previous, sources, profile) {
   if (!previous || !Array.isArray(previous.paths))
     throw new Error('旧分析结果不可用于条件重算。');
   const byId = new Map(sources.map((source) => [source.id, source]));
+  const readiness = researchReadiness(profile);
   const cases = previous.paths
     .flatMap((path) => path.cases || [])
     .flatMap((item) => {
       const source = byId.get(item.sourceId);
-      if (!source) return [];
+      if (!source || !sourceMatchesDecisionPath(source, profile.decisionPath)) return [];
       return [
         {
           ...item,
@@ -845,8 +846,10 @@ export function rematchAnalysis(previous, sources, profile) {
   }
   return {
     ...previous,
+    ...readiness,
     paths,
-    insights: buildDecisionInsights(paths, previous.insights || []),
+    insights: buildDecisionInsights(paths, previous.insights || []).map((insight) =>
+      readiness.researchMode === 'general' ? { ...insight, applicability: '必需条件尚未补齐，仅作通用经验参考，不判断个人适用性。' } : insight),
     questions: researchQuestions(questions, profile),
     analyzedAt: Date.now(),
     coverage: researchCoverage(sources, paths),

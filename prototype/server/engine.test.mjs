@@ -8,6 +8,7 @@ import {
   validateAnalysis,
   validProfile,
   researchQuestions,
+  rematchAnalysis,
 } from './engine.mjs';
 
 const profile = validProfile({ question: '在职转行开发', time: '每天两小时' });
@@ -50,6 +51,16 @@ test('missing basics generate questions without fabricated evidence', () => {
   assert.equal(researchQuestions([], {
     ...input, conditionAnswers: { institution_name: '示例大学', current_major: '机械', target_major: '中文' },
   }).length, 0);
+});
+
+test('rematching recalculates readiness when required conditions are cleared', () => {
+  const previous = validateAnalysis(raw, sources, profile);
+  const ready = rematchAnalysis(previous, sources, { ...profile, decisionPath: 'career_change', conditionAnswers: { current_job_function: '运营', target_job_function: '开发' } });
+  assert.equal(ready.researchMode, 'personalized');
+  const incomplete = rematchAnalysis(ready, sources, { ...profile, decisionPath: 'career_change', conditionAnswers: { current_job_function: '尚未核实' } });
+  assert.equal(incomplete.researchMode, 'general');
+  assert.ok(incomplete.insights.every((item) => /通用/.test(item.applicability)));
+  assert.ok(incomplete.missingRequired.includes('current_job_function'));
 });
 
 test('profile preserves all dictionary answers and validates entries after twelve', () => {
