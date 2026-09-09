@@ -37,3 +37,15 @@ test('usage storage drops new and legacy question text', async () => {
     await rm(resolve(cwd), { recursive: true, force: true });
   }
 });
+
+test('an unavailable cache is treated as a miss rather than a search failure', async () => {
+  const cwd = await mkdtemp(join(tmpdir(), 'cache-unavailable-'));
+  const { mkdir } = await import('node:fs/promises');
+  try {
+    await mkdir(join(cwd, '.local', 'search-cache.sqlite'), { recursive: true });
+    const moduleUrl = new URL('./storage.mjs', import.meta.url).href;
+    const script = `const storage = await import(${JSON.stringify(moduleUrl)}); if (await storage.getCachedSearch('虚构问题') !== null) process.exit(2);`;
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], { cwd, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+  } finally { await rm(cwd, { recursive: true, force: true }); }
+});

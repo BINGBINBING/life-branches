@@ -87,15 +87,19 @@ const SEARCH_TTL_MS = 24 * 60 * 60 * 1000; // 24 小时
 
 /** 读持久搜索缓存；key 未命中或已过期返回 null。 */
 export async function getCachedSearch(key) {
-  const cached = searchCache.get(key);
-  if (cached) return cached;
-  const rows = await readLines('search-cache.jsonl');
-  for (let i = rows.length - 1; i >= 0; i--) {
-    const row = rows[i];
-    if (!row || row.key !== key) continue;
-    if (Date.now() - (row.at || 0) > SEARCH_TTL_MS) return null;
-    searchCache.put(key, { at: row.at, data: row.data });
-    return searchCache.get(key);
+  try {
+    const cached = searchCache.get(key);
+    if (cached) return cached;
+    const rows = await readLines('search-cache.jsonl');
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const row = rows[i];
+      if (!row || row.key !== key) continue;
+      if (Date.now() - (row.at || 0) > SEARCH_TTL_MS) return null;
+      searchCache.put(key, { at: row.at, data: row.data });
+      return searchCache.get(key);
+    }
+  } catch {
+    // Cache availability must not determine whether a budgeted search can run.
   }
   return null;
 }
