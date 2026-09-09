@@ -899,6 +899,8 @@ questions只问来源里明确存在、用户尚未说明、能影响适用性�
   const result = validateAnalysis(raw.value, sources, profile);
   progress('正在复核总结是否忠于原文…');
   const summaryReview = await reviewSummaries(result, raw.value, sources, options.ask || ask);
+  result.insights = buildDecisionInsights(result.paths, result.insights).map((insight) =>
+    profile.researchMode === 'general' ? { ...insight, applicability: '必需条件尚未补齐，仅作通用经验参考，不判断个人适用性。' } : insight);
   const usage = { ...raw.metadata?.usage };
   for (const [key, value] of Object.entries(summaryReview.metadata?.usage || {}))
     if (Number.isFinite(value)) usage[key] = (usage[key] || 0) + value;

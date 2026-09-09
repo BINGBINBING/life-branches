@@ -128,6 +128,7 @@ export type Path = {
   };
 };
 export type Insight = {
+  verification?: string;
   type: 'practice' | 'risk';
   title: string;
   text: string;

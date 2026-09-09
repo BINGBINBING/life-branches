@@ -38,7 +38,7 @@ test('risk is only synthesized from a locally validated setback stage', () => {
   const result = buildDecisionInsights(paths, []);
   const risk = result.find((item) => item.type === 'risk');
   assert.equal(risk.quote, '我面试三次都被拒');
-  assert.match(risk.applicability, /这项风险与你有关/);
+  assert.match(risk.applicability, /风险是否与你相关还需核查/);
 });
 
 test('missing user condition stays explicitly unknown', () => {

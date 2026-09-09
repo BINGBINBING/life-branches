@@ -15,13 +15,13 @@ function applicability(type, item) {
   }
   if (comparison.status === 'different') {
     return type === 'practice'
-      ? `这项做法值得参考，但案例的${comparison.label}为${comparison.caseValue}，你为${comparison.userValue}，不能直接照搬其周期或结果。`
-      : `案例的${comparison.label}为${comparison.caseValue}，你为${comparison.userValue}。条件不同，这项风险与你有关，但不能直接套用案例中的严重程度。`;
+      ? `案例的${comparison.label}为${comparison.caseValue}，你为${comparison.userValue}。这是需要核对的差异，不能直接照搬其周期或结果。`
+      : `案例的${comparison.label}为${comparison.caseValue}，你为${comparison.userValue}。条件不同，风险是否与你相关还需核查，不能直接套用案例中的严重程度。`;
   }
   if (comparison.status === 'similar') {
     return type === 'practice'
-      ? `案例与你的${comparison.label}均为${comparison.caseValue}，这项做法更值得优先验证，但单项相同不代表整体条件相同。`
-      : `案例与你的${comparison.label}均为${comparison.caseValue}，这项风险值得优先核查，但仍不能据此断定会出现相同结果。`;
+      ? `案例与你的${comparison.label}均为${comparison.caseValue}；这只说明单项条件相同，做法是否适用仍待验证。`
+      : `案例与你的${comparison.label}均为${comparison.caseValue}；单项相同不能证明风险相关，也不能据此断定会出现相同结果。`;
   }
   return type === 'practice'
     ? `案例的${comparison.label}为${comparison.caseValue}；你尚未提供同口径信息，做法可以参考，但适用程度仍待确认。`
@@ -42,6 +42,8 @@ export function buildDecisionInsights(paths, validatedInsights) {
       return;
     result.push({
       ...insight,
+      ...(insight.type === 'practice' && item.action.verification === 'model-reviewed' && insight.quote === item.action.quote
+        ? { text: item.action.summary, verification: 'model-reviewed', title: '行动归纳' } : {}),
       applicability: applicability(insight.type, item),
     });
     seen.add(key);
@@ -52,7 +54,8 @@ export function buildDecisionInsights(paths, validatedInsights) {
     add({
       type: 'practice',
       title: '来源中的可参考做法',
-      text: item.action.quote,
+      text: item.action.verification === 'model-reviewed' ? item.action.summary : item.action.quote,
+      verification: item.action.verification,
       sourceId: item.sourceId,
       quote: item.action.quote,
     });

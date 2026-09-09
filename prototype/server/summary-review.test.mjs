@@ -39,3 +39,13 @@ test('failed, malformed, ambiguous and negative reviews retain the original exce
   assert.equal(summaryHasSupport('每天8小时', '每天2小时'), false);
   assert.equal(summaryHasSupport('练习因此保证就业', '每天练习'), false);
 });
+
+test('practice and risk summaries share the same bounded review call', async () => {
+  const insight = { sourceId: 'S1', type: 'risk', quote: '准备期间中断收入，积蓄很快用完', text: '准备期间中断收入，积蓄很快用完' };
+  const result = { paths: [], insights: [insight] };
+  const review = await reviewSummaries(result, { insights: [{ ...insight, text: '准备过程存在收入中断和积蓄消耗风险' }] }, [], async () => ({ value: { reviews: [{ id: 'insight:0', supported: true }] } }));
+  assert.equal(review.calls, 1);
+  assert.equal(insight.text, '准备过程存在收入中断和积蓄消耗风险');
+  assert.equal(insight.title, '风险归纳');
+  assert.equal(insight.quote, '准备期间中断收入，积蓄很快用完');
+});

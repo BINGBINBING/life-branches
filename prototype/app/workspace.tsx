@@ -2184,6 +2184,7 @@ export default function Workspace() {
                                 <div className="insight" key={index}>
                                   <h4>{i.title}</h4>
                                   <p>{i.text}</p>
+                                  <p className="meta">{i.verification === 'model-reviewed' ? 'AI 归纳，已作模型证据复核' : '原文片段，归纳尚未通过复核'}</p>
                                   <p className="insight-applicability">
                                     <strong>
                                       {i.type === 'practice'
