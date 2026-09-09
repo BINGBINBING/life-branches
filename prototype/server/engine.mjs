@@ -9,6 +9,7 @@ import { markDuplicateSources } from './source-duplicates.mjs';
 import { researchCoverage } from './research-coverage.mjs';
 import { reviewSummaries } from './summary-review.mjs';
 import { hasObservableAction } from './action-evidence.mjs';
+import { classifyContent } from './content-kind.mjs';
 import { dictionaryIndex } from './condition-dictionary.mjs';
 import {
   COMPARABLE_CONDITIONS,
@@ -692,16 +693,17 @@ export function validateAnalysis(raw, sources, profile) {
           profile.decisionScope,
           evidence,
         ) || discoverOutcomeStage(source, profile.decisionScope, evidence);
-      // Model-assigned promotion or author identity is not an exclusion rule.
-      const category = 'unknown';
+      const classification = classifyContent(action.quote);
+      if (classification.kind === 'advice') {
+        rejected++;
+        sourceReasons.set(source.id, classification.reason);
+        continue;
+      }
       cases.push({
         id: source.id,
         sourceId: source.id,
-        kind: category,
-        classification: {
-          status: 'unverified',
-          reason: '作者身份与推广性质尚未核实；认证不作为推广依据。',
-        },
+        kind: classification.kind,
+        classification,
         background,
         action,
         outcome,

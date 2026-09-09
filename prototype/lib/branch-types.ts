@@ -91,6 +91,7 @@ export type ConditionComparison = {
   needsUserInput: boolean;
 };
 export type Experience = {
+  classification?: { status: string; reason: string };
   actionTags?: { id: string; label: string; quote: string }[];
   id: string;
   sourceId: string;

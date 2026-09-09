@@ -169,6 +169,7 @@ function ExperienceCard({
       </div>
       <h3>{source.title.replace(/\s*-\s*知乎$/, '')}</h3>
       <p className="meta">仅依据检索摘要 · 未核验全文及事件真实性，可能缺少否定、转折或后续结果。</p>
+      {item.classification && <p className="meta">{item.classification.reason}</p>}
       {!!item.actionTags?.length && <p className="meta">引文中的行动：{item.actionTags.map((tag) => tag.label).join('、')}。主分枝仅用于归类，不代表唯一做法。</p>}
       <div className="author-row">
         <span>{source.author}</span>
