@@ -50,8 +50,10 @@ function authAdmin(req, env = process.env) {
   if (typeof got !== 'string' || !got) return false;
   const want = resolveAdminPassword(env);
   if (!want) return false;
-  if (got.length !== want.length) return false;
-  return timingSafeEqual(Buffer.from(got), Buffer.from(want));
+  const received = Buffer.from(got);
+  const expected = Buffer.from(want);
+  if (received.length !== expected.length) return false;
+  return timingSafeEqual(received, expected);
 }
 
 function localDay(ts) {

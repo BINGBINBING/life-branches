@@ -56,6 +56,7 @@ async function call(
   targetHandler = handler,
   host = 'localhost:4317',
   cookie = '',
+  extraHeaders = {},
 ) {
   let status;
   let value;
@@ -68,6 +69,7 @@ async function call(
       origin,
       'content-type': 'application/json',
       cookie,
+      ...extraHeaders,
     },
     async *[Symbol.asyncIterator]() {
       yield JSON.stringify(payload);
@@ -185,6 +187,14 @@ test('production disables the admin endpoint when no password is configured', as
   );
   assert.equal(response.status, 503);
   assert.match(response.value.error, /管理功能未启用/);
+});
+test('multibyte incorrect admin passwords are rejected without throwing', async () => {
+  const target = createHandler({ env: { NODE_ENV: 'production', ADMIN_PASSWORD: 'ab' } });
+  for (const password of ['éé', '密码', 'zz', ['ab'], '']) {
+    const response = await call('/api/branches/admin/summary', 'GET', {},
+      'http://localhost:4317', target, 'localhost:4317', '', { 'x-admin-password': password });
+    assert.equal(response.status, 401);
+  }
 });
 test('developer key tools are local-only and disabled in production', async () => {
   assert.equal(
