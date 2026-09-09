@@ -123,17 +123,17 @@ export function classifyCareerMove(profile) {
   return { id: 'same_role', label: '行业与职能均未变化' };
 }
 
-export function groupCasesByPath(cases, profile, sources) {
+export function groupCasesByPath(cases, profile) {
   const groups = new Map();
   for (const item of cases) {
+    const matches = matchingActions(profile.decisionScope === 'major_transition' ? majorActions : careerPaths, item.action?.quote);
     let path;
     if (profile.decisionScope === 'major_transition') {
-      path = matchingActions(majorActions, item.action?.quote)[0] || {
+      path = matches[0] || {
         id: 'action_unknown', label: '行动方式待确认',
       };
     } else {
-      const text = sourceText(sources.get(item.sourceId), item.action?.quote);
-      path = careerPaths.find((candidate) => candidate.pattern.test(text)) || {
+      path = matches[0] || {
         id: 'preparation_mode_unknown',
         label: '准备方式待确认',
       };
@@ -141,7 +141,9 @@ export function groupCasesByPath(cases, profile, sources) {
     if (!groups.has(path.id))
       groups.set(path.id, { id: path.id, name: path.label,
         decisionRoute: profile.decisionPath || '', actionBranch: path.id, cases: [] });
-    groups.get(path.id).cases.push(item);
+    groups.get(path.id).cases.push({ ...item,
+      actionTags: matches.map(({ id, label }) => ({ id, label, quote: item.action.quote })),
+    });
   }
   return [...groups.values()].slice(0, 7);
 }

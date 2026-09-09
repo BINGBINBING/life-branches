@@ -132,3 +132,13 @@ test('academic action catalogue covers eligibility, adaptation and fallback with
   assert.deepEqual(paths.map((p) => p.id), ['eligibility_preparation', 'post_transfer_adaptation', 'alternative_plan', 'action_unknown']);
   assert.equal(paths.at(-1).cases.length, 2);
 });
+
+test('a multi-action case appears once and retains secondary evidence tags', () => {
+  const item = { sourceId: 'S1', action: { quote: '我补修了基础课程。参加了转专业面试。提交了申请材料。' } };
+  const paths = groupCasesByPath([item], { decisionScope: 'major_transition', decisionPath: 'campus_transfer' });
+  assert.equal(paths.length, 1);
+  assert.equal(paths[0].cases.length, 1);
+  assert.equal(paths[0].cases[0].actionTags.length, 3);
+  assert.ok(paths[0].cases[0].actionTags.every((tag) => tag.quote === item.action.quote));
+  assert.equal(item.actionTags, undefined);
+});

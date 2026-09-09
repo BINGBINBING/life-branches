@@ -91,6 +91,7 @@ export type ConditionComparison = {
   needsUserInput: boolean;
 };
 export type Experience = {
+  actionTags?: { id: string; label: string; quote: string }[];
   id: string;
   sourceId: string;
   kind: 'self' | 'retold' | 'advice' | 'promotion' | 'unknown';
