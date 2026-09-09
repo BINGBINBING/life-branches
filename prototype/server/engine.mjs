@@ -22,6 +22,7 @@ import {
 import { buildDecisionInsights } from './decision-summary.mjs';
 import {
   classifyCareerMove,
+  isReverseCareerCase,
   decisionPathTerm,
   groupCasesByPath,
   sourceMatchesDecisionPath,
@@ -644,6 +645,12 @@ export function validateAnalysis(raw, sources, profile) {
       }
       citationAttempts++;
       const action = fact(source, item.action);
+      if (action && isReverseCareerCase(source, action.quote, profile)) {
+        sourceReasons.set(source.id, '案例附近明确的岗位转换方向与你的目标相反，仅保留原始来源');
+        rejected++;
+        rejectionReasons.pathMismatch++;
+        continue;
+      }
       if (!action) {
         sourceReasons.set(source.id, '行动引文未通过片段校验');
         rejected++;
@@ -793,6 +800,7 @@ export function rematchAnalysis(previous, sources, profile) {
     .flatMap((item) => {
       const source = byId.get(item.sourceId);
       if (!source || !sourceMatchesDecisionPath(source, profile.decisionPath)) return [];
+      if (isReverseCareerCase(source, item.action?.quote, profile)) return [];
       const stage = discoverOutcomeStage(source, profile.decisionScope, evidence) ||
         validateOutcomeStage(source, { stageId: item.stage?.id, quote: item.stage?.quote }, profile.decisionScope, evidence);
       return [
@@ -844,6 +852,7 @@ export function rematchAnalysis(previous, sources, profile) {
         accepted,
         reason: accepted ? '已纳入详细案例'
           : !sourceMatchesDecisionPath(source, profile.decisionPath) ? '与当前选择路径不符'
+          : previous.paths.flatMap((path) => path.cases || []).some((item) => item.sourceId === source.id && isReverseCareerCase(source, item.action?.quote, profile)) ? '案例附近明确的岗位转换方向与你的目标相反，仅保留原始来源'
           : prior && !prior.accepted ? prior.reason : '未入选本轮详细分析，仍可查看原始来源',
       };
     }),
@@ -903,6 +912,7 @@ questions只问来源里明确存在、用户尚未说明、能影响适用性�
 给定来源：${JSON.stringify(supplied)}`;
   const raw = options.preloadedRaw || await (options.ask || ask)(
     prompt +
+      '\n职业方向约束：以用户目标岗位作为转换终点，不能把“开发转运营”用于“运营转开发”的案例对照。原岗位不同可说明背景差异，但转换终点必须相关；方向无法确认时不要当作同方向案例。多故事来源只引用所选故事，不混用不同人物或方向。' +
       '\n推广处理覆盖规则：不要仅凭认证、机构身份或疑似推广剔除来源；保留有行动引文的相关来源，内容性质交由后续审核。不要输出未经证实的作者属性。' +
       '\n额外约束：完成项目或部署不等于成功就业；电子信息专业不等于有编程基础。result 的 success 必须由目标阶段的明确成果支持。路径名称不允许加入未经原文确认的在职/脱产状态。missing 不得询问是否愿意伪造经验等不诚信行为。',
   );

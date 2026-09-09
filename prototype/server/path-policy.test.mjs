@@ -2,9 +2,21 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   classifyCareerMove,
+  isReverseCareerCase,
   groupCasesByPath,
   sourceMatchesDecisionPath,
 } from './path-policy.mjs';
+
+test('reverse career direction is checked near the selected action, not another story', () => {
+  const profile = { decisionScope: 'career_transition', conditionAnswers: { current_job_function: '运营', target_job_function: '软件开发' } };
+  const action = '我开始学习产品运营知识';
+  assert.equal(isReverseCareerCase({ snippets: [`从程序员到产品运营\n${action}`] }, action, profile), true);
+  assert.equal(isReverseCareerCase({ snippets: [`从运营转向软件开发\n我完成了开发项目`] }, '我完成了开发项目', profile), false);
+  assert.equal(isReverseCareerCase({ snippets: [`### 案例一：从程序员到产品运营\n${action}\n### 案例二：从运营到开发\n我完成了开发项目`] }, '我完成了开发项目', profile), false);
+  assert.equal(isReverseCareerCase({ title: '从程序员到运营', snippets: [action] }, action, profile), false);
+  assert.equal(isReverseCareerCase({ snippets: [action] }, action, profile), false);
+  assert.equal(isReverseCareerCase({ snippets: [`我不是从程序员到产品运营\n${action}`] }, action, profile), false);
+});
 
 test('explicitly conflicting academic routes are excluded', () => {
   assert.equal(

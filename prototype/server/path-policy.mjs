@@ -95,6 +95,28 @@ export function sourceMatchesDecisionPath(source, decisionPath) {
   );
 }
 
+export function isReverseCareerCase(source, actionQuote, profile) {
+  if (profile.decisionScope !== 'career_transition' || !actionQuote) return false;
+  const current = canonical(profile.conditionAnswers?.current_job_function, functionAliases);
+  const target = canonical(profile.conditionAnswers?.target_job_function, functionAliases);
+  if (!current || !target || current === target) return false;
+  for (const snippet of source.snippets || []) {
+    const position = snippet.indexOf(actionQuote);
+    if (position < 0) continue;
+    // Stay near this action and inside its Markdown case section, not other stories.
+    const headings = [...snippet.matchAll(/^#{1,6}\s.+$/gm)];
+    const previous = headings.filter((match) => match.index <= position).at(-1)?.index ?? 0;
+    const next = headings.find((match) => match.index > position)?.index ?? snippet.length;
+    const context = snippet.slice(Math.max(previous, position - 500), Math.min(next, position + actionQuote.length + 180));
+    const transitions = [...context.matchAll(/从([^，。；：:\n]{1,24}?)(?:转岗到|转行到|转行做|转向|转为|到)([^，。；：:\n（）]{1,24})/g)]
+      .filter((match) => !/不|没|如果|假设|建议/.test(context.slice(Math.max(0, match.index - 12), match.index)));
+    const directions = transitions.map((match) => [canonical(match[1], functionAliases), canonical(match[2], functionAliases)]);
+    if (directions.some(([from, to]) => from === current && to === target)) continue;
+    if (directions.some(([from, to]) => from === target && to === current)) return true;
+  }
+  return false;
+}
+
 export function classifyCareerMove(profile) {
   const answers = profile.conditionAnswers || {};
   const currentIndustry = answers.current_industry?.trim();

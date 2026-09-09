@@ -13,6 +13,24 @@ import {
 
 const profile = validProfile({ question: '在职转行开发', time: '每天两小时' });
 
+test('reverse-direction cases are excluded on initial analysis and rematching', () => {
+  const source = { id: 'S1', title: '职业经历', snippets: ['从程序员到产品运营。之后我开始学习产品运营知识'] };
+  const action = { text: '开始学习运营', quote: '我开始学习产品运营知识' };
+  const raw = { paths: [{ cases: [{ sourceId: 'S1', action }] }] };
+  const incoming = validProfile({ question: '运营转开发', decisionScope: 'career_transition', decisionPath: 'career_change',
+    conditionAnswers: { current_job_function: '运营', target_job_function: '软件开发' } });
+  const rejected = validateAnalysis(raw, [source], incoming);
+  assert.equal(rejected.paths.length, 0);
+  assert.match(rejected.sourceDispositions[0].reason, /方向.*相反/);
+  const original = validProfile({ ...incoming, conditionAnswers: { current_job_function: '软件开发', target_job_function: '运营' } });
+  const accepted = validateAnalysis(raw, [source], original);
+  assert.equal(accepted.paths.length, 1);
+  const rematched = rematchAnalysis(accepted, [source], incoming);
+  assert.equal(rematched.paths.length, 0);
+  assert.equal(rematched.insights.length, 0);
+  assert.match(rematched.sourceDispositions[0].reason, /方向.*相反/);
+});
+
 test('a title alone cannot validate an action citation', () => {
   const result = validateAnalysis({ paths: [{ cases: [{ sourceId: 'S1',
     action: { text: '已经找到工作', quote: '已经找到工作' },
