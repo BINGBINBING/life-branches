@@ -623,6 +623,7 @@ export function validateAnalysis(raw, sources, profile) {
     throw new Error('分析内容格式不正确，已有来源仍可查看。');
   const byId = new Map(sources.map((s) => [s.id, s]));
   const acceptedCases = [];
+  const sourceReasons = new Map();
   let rejected = 0;
   const rejectionReasons = {
     pathMismatch: 0,
@@ -646,6 +647,7 @@ export function validateAnalysis(raw, sources, profile) {
       const source = byId.get(item.sourceId);
       if (!source || seen.has(source.id)) continue;
       if (!sourceMatchesDecisionPath(source, profile.decisionPath)) {
+        sourceReasons.set(source.id, '与当前选择路径不符');
         rejected++;
         rejectionReasons.pathMismatch++;
         continue;
@@ -653,6 +655,7 @@ export function validateAnalysis(raw, sources, profile) {
       citationAttempts++;
       const action = fact(source, item.action);
       if (!action) {
+        sourceReasons.set(source.id, '行动引文未通过片段校验');
         rejected++;
         rejectionReasons.missingActionCitation++;
         continue;
@@ -756,6 +759,11 @@ export function validateAnalysis(raw, sources, profile) {
     paths,
     insights: decisionInsights,
     questions: researchQuestions(questions, profile),
+    sourceDispositions: sources.map((source) => ({
+      sourceId: source.id,
+      accepted: seen.has(source.id),
+      reason: seen.has(source.id) ? '已纳入详细案例' : sourceReasons.get(source.id) || '未入选详细分析；可能受案例数量限制或模型选择影响，具体内容价值尚未核实',
+    })),
     rejected,
     rejectionReasons,
     citationPassRate: citationAttempts

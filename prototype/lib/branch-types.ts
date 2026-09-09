@@ -141,6 +141,7 @@ export type Question = {
   options: string[];
 };
 export type Analysis = {
+  sourceDispositions?: { sourceId: string; accepted: boolean; reason: string }[];
   researchMode?: 'general' | 'personalized';
   missingRequired?: string[];
   paths: Path[];

@@ -18,6 +18,14 @@ test('a title alone cannot validate an action citation', () => {
   }] }] }, [{ id: 'S1', title: '已经找到工作', snippets: ['想请教大家如何开始准备'] }], profile);
   assert.equal(result.paths.length, 0);
   assert.equal(result.rejectionReasons.missingActionCitation, 1);
+  assert.deepEqual(result.sourceDispositions, [{ sourceId: 'S1', accepted: false, reason: '行动引文未通过片段校验' }]);
+});
+
+test('unselected sources keep an explicit unknown reason rather than invented rejection', () => {
+  const result = validateAnalysis({ paths: [] }, [{ id: 'S1', title: '经历', snippets: ['我做了项目'] }], profile);
+  assert.equal(result.sourceDispositions[0].accepted, false);
+  assert.match(result.sourceDispositions[0].reason, /未入选详细分析/);
+  assert.match(result.sourceDispositions[0].reason, /尚未核实/);
 });
 
 test('missing basics generate questions without fabricated evidence', () => {

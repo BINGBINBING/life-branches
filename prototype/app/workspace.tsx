@@ -2482,12 +2482,18 @@ export default function Workspace() {
                     <span className="meta">包含未纳入路径的内容</span>
                   </summary>
                   <div className="source-list">
+                    {job?.result?.sourceDispositions && (
+                      <p className="meta">详细案例采用 {job.result.sourceDispositions.filter((item) => item.accepted).length} 个来源；
+                        未采用 {job.result.sourceDispositions.filter((item) => !item.accepted).length} 个来源。未采用不等于无价值。
+                      </p>
+                    )}
                     {job?.sources.map((s) => (
                       <article key={s.id}>
                         <div>
                           <h3>{s.title}</h3>
                           <SourceLink source={s} />
                         </div>
+                        <p className="meta">{job?.result?.sourceDispositions?.find((item) => item.sourceId === s.id)?.reason || '来源去向未记录'}</p>
                         <p className="meta">
                           仅摘要 ·{' '}
                           {s.author} ·{' '}
