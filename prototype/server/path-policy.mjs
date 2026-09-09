@@ -12,7 +12,7 @@ const careerPaths = [
   {
     id: 'internal_transfer',
     label: '内部转岗',
-    pattern: /内部转岗|内部竞聘|公司内部.{0,6}转/,
+    pattern: /内部转岗|内部竞聘|公司内部.{0,6}转|(?:申请|参加)轮岗/,
   },
   {
     id: 'fulltime_preparation',

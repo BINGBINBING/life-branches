@@ -8,3 +8,10 @@ test('observable actions exclude attitude, wishes and advice-only clauses', () =
   for (const quote of ['我每天学习两小时', '我完成了网页项目', '我提交了转专业申请', '我完成了项目，从未后悔', '我想继续深造，但我已经提交了转专业申请', '我参加了转专业笔试', '我完成了转专业考核'])
     assert.equal(hasObservableAction(quote), true, quote);
 });
+
+test('requests for workers are not completed personal actions', () => {
+  for (const quote of ['项目需要人帮忙整理数据', '领导问谁有空开发项目', '公司要求大家学习编程', '现在招募同学帮忙整理资料'])
+    assert.equal(hasObservableAction(quote), false, quote);
+  assert.equal(hasObservableAction('我根据要求整理了资料'), true);
+  assert.equal(hasObservableAction('项目需要人帮忙整理数据，我已经完成了数据整理'), true);
+});

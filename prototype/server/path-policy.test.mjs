@@ -18,6 +18,13 @@ test('reverse career direction is checked near the selected action, not another 
   assert.equal(isReverseCareerCase({ snippets: [`我不是从程序员到产品运营\n${action}`] }, action, profile), false);
 });
 
+test('explicit rotation applications are an internal move action, not an achieved outcome', () => {
+  const groups = groupCasesByPath([{ sourceId: 'S1', result: 'unknown', action: { quote: '我主动找领导申请轮岗' } }], { decisionScope: 'career_transition' });
+  assert.equal(groups[0].actionBranch, 'internal_transfer');
+  assert.equal(groups[0].cases[0].result, 'unknown');
+  assert.equal(groupCasesByPath([{ action: { quote: '我计划申请轮岗' } }], { decisionScope: 'career_transition' })[0].actionBranch, 'preparation_mode_unknown');
+});
+
 test('explicitly conflicting academic routes are excluded', () => {
   assert.equal(
     sourceMatchesDecisionPath(
