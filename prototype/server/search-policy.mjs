@@ -1,5 +1,13 @@
 import { researchReadiness } from './research-readiness.mjs';
 
+export const SEARCH_ROUNDS = [
+  { layer: 'hard_path', purpose: '行动路径与硬条件' },
+  { layer: 'adaptive_gap', purpose: '根据首轮缺口补充' },
+  { layer: 'outcome', purpose: '阶段结果' },
+  { layer: 'constraints', purpose: '限制与成本' },
+  { layer: 'retrospective', purpose: '后续回顾' },
+];
+
 export function verifiedCoverageReached(result, profile) {
   if (researchReadiness(profile).researchMode !== 'personalized') return false;
   const paths = (result?.paths || []).filter((path) => path.cases?.length);

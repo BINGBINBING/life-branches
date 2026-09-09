@@ -4,7 +4,7 @@ import { homedir, platform } from 'node:os';
 import { win32, posix } from 'node:path';
 import { existsSync } from 'node:fs';
 import { deepseekJSON } from './deepseek.mjs';
-import { searchStopReason } from './search-policy.mjs';
+import { searchStopReason, SEARCH_ROUNDS } from './search-policy.mjs';
 import { markDuplicateSources } from './source-duplicates.mjs';
 import { researchCoverage } from './research-coverage.mjs';
 import { researchReadiness } from './research-readiness.mjs';
@@ -501,7 +501,8 @@ export async function search(
   // Stop immediately on quota/auth errors; don't fan out requests on a failing account.
   for (let index = 0; index < SEARCH_CALL_LIMIT; index++) {
     const query = queries[index];
-    progress(`正在检索${results.length ? '受挫经历' : '行动与成果'}…`);
+    const round = SEARCH_ROUNDS[index];
+    progress(`正在检索${round.purpose}（第${index + 1}轮）…`);
     let data = cache.get(query);
     const cached = Boolean(data && Date.now() - data.at <= 3600000);
     if (!data || Date.now() - data.at > 3600000) {
@@ -525,13 +526,7 @@ export async function search(
         }
         onMetric({
           stage: 'zhihu_search',
-          queryLayer: [
-            'hard_path',
-            'adaptive_gap',
-            'outcome',
-            'constraints',
-            'retrospective',
-          ][index],
+          queryLayer: round.layer,
           status: 'ok',
           elapsedMs: Date.now() - started,
           searchCalls: remoteAttempted ? 1 : 0,
@@ -540,13 +535,7 @@ export async function search(
       } catch (error) {
         onMetric({
           stage: 'zhihu_search',
-          queryLayer: [
-            'hard_path',
-            'adaptive_gap',
-            'outcome',
-            'constraints',
-            'retrospective',
-          ][index],
+          queryLayer: round.layer,
           status: 'failed',
           elapsedMs: Date.now() - started,
           searchCalls: remoteAttempted ? 1 : 0,
@@ -560,13 +549,7 @@ export async function search(
     if (cached)
       onMetric({
         stage: 'zhihu_search',
-        queryLayer: [
-          'hard_path',
-          'adaptive_gap',
-          'outcome',
-          'constraints',
-          'retrospective',
-        ][index],
+        queryLayer: round.layer,
         status: 'ok',
         elapsedMs: 0,
         searchCalls: 0,
@@ -577,7 +560,7 @@ export async function search(
     sourceCounts.push(currentSources.length);
     onMetric({
       stage: 'query_result', round: index + 1, query,
-      purpose: ['行动路径与硬条件', '根据首轮缺口补充', '阶段结果', '限制与成本', '后续回顾'][index],
+      purpose: round.purpose,
       returnedCount: data.data.Data?.Items?.length || 0,
       sourceCount: currentSources.length,
     });
@@ -917,7 +900,7 @@ questions只问来源里明确存在、用户尚未说明、能影响适用性�
   await options.onRaw?.(raw);
   progress('正在逐条检查引用是否存在于原始片段…');
   const result = validateAnalysis(raw.value, sources, profile);
-  progress('正在复核总结是否忠于原文…');
+  if (!options.deferSummaryReview) progress('正在复核总结是否忠于原文…');
   const summaryReview = options.deferSummaryReview
     ? { calls: 0, status: 'deferred' }
     : await reviewSummaries(result, raw.value, sources, options.ask || ask);
