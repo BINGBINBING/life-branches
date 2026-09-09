@@ -140,3 +140,8 @@ These controlled checks do not replace real-service or cross-browser acceptance.
 The `miniflare` transitive `sharp` dependency is overridden to `0.35.4` to
 address GHSA-rgj7-g3m4-5g8c without downgrading the Cloudflare toolchain.
 Revisit this override when upstream updates its pinned dependency.
+
+Analysis selects up to four contiguous windows of at most 600 characters per
+source from already returned text, retaining the opening and preferring action
+and outcome paragraphs. Windows are ordered, not concatenated into a quote.
+This does not fetch full articles or guarantee complete context.
