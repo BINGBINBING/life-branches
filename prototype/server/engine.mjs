@@ -815,9 +815,16 @@ export function rematchAnalysis(previous, sources, profile) {
     .flatMap((item) => {
       const source = byId.get(item.sourceId);
       if (!source || !sourceMatchesDecisionPath(source, profile.decisionPath)) return [];
+      const stage = discoverOutcomeStage(source, profile.decisionScope, evidence) ||
+        validateOutcomeStage(source, { stageId: item.stage?.id, quote: item.stage?.quote }, profile.decisionScope, evidence);
       return [
         {
           ...item,
+          stage,
+          result: stage?.result || 'unknown',
+          outcomeVerification: stage
+            ? '阶段名称与连续原文均通过本地规则校验；仅代表该阶段，不代表整体转型成功或失败。'
+            : '目标阶段与结果语义尚未核实，保留原文，不自动判为成功或失败。',
           comparison: compareTime(source, profile),
           conditionComparisons: compareConditionEvidence(
             source,
@@ -851,6 +858,17 @@ export function rematchAnalysis(previous, sources, profile) {
     ...previous,
     ...readiness,
     paths,
+    sourceDispositions: sources.map((source) => {
+      const accepted = cases.some((item) => item.sourceId === source.id);
+      const prior = previous.sourceDispositions?.find((item) => item.sourceId === source.id);
+      return {
+        sourceId: source.id,
+        accepted,
+        reason: accepted ? '已纳入详细案例'
+          : !sourceMatchesDecisionPath(source, profile.decisionPath) ? '与当前选择路径不符'
+          : prior && !prior.accepted ? prior.reason : '未入选本轮详细分析，仍可查看原始来源',
+      };
+    }),
     insights: buildDecisionInsights(paths, previous.insights || []).map((insight) =>
       readiness.researchMode === 'general' ? { ...insight, applicability: '必需条件尚未补齐，仅作通用经验参考，不判断个人适用性。' } : insight),
     questions: researchQuestions(questions, profile),

@@ -63,6 +63,27 @@ test('rematching recalculates readiness when required conditions are cleared', (
   assert.ok(incomplete.missingRequired.includes('current_job_function'));
 });
 
+test('rematching updates source dispositions and removes insights for excluded routes', () => {
+  const source = { id: 'S1', title: '校内转专业', snippets: ['我提交了转专业申请材料'] };
+  const input = { ...profile, decisionScope: 'major_transition', decisionPath: 'campus_transfer' };
+  const previous = validateAnalysis({ paths: [{ cases: [{ sourceId: 'S1', action: { text: source.snippets[0], quote: source.snippets[0] } }] }] }, [source], input);
+  assert.equal(previous.sourceDispositions[0].accepted, true);
+  const changed = rematchAnalysis(previous, [source], { ...input, decisionPath: 'cross_major_graduate' });
+  assert.equal(changed.paths.length, 0);
+  assert.equal(changed.insights.length, 0);
+  assert.deepEqual(changed.sourceDispositions, [{ sourceId: 'S1', accepted: false, reason: '与当前选择路径不符' }]);
+});
+
+test('rematching does not retain a milestone from another decision scope', () => {
+  const source = { id: 'S1', title: '学习经历', snippets: ['我完成了学习项目', '我最后收到开发岗位录用通知'] };
+  const previous = validateAnalysis({ paths: [{ cases: [{ sourceId: 'S1', action: { text: source.snippets[0], quote: source.snippets[0] } }] }] }, [source], { ...profile, decisionScope: 'career_transition' });
+  assert.equal(previous.paths[0].cases[0].stage.id, 'offer_received');
+  const changed = rematchAnalysis(previous, [source], { ...profile, decisionScope: 'major_transition' });
+  assert.equal(changed.paths[0].cases[0].stage, null);
+  assert.equal(changed.paths[0].cases[0].result, 'unknown');
+  assert.match(changed.paths[0].cases[0].outcomeVerification, /尚未核实/);
+});
+
 test('profile preserves all dictionary answers and validates entries after twelve', () => {
   const conditionAnswers = Object.fromEntries(
     [...dictionaryIndex.values()]
