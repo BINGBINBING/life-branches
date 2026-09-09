@@ -974,6 +974,7 @@ export default function Workspace() {
   const [dynamicOpen, setDynamicOpen] = useState(false);
   const [records, setRecords] = useState<ResearchSummary[]>([]);
   const [savedRecordId, setSavedRecordId] = useState('');
+  const [feedbackDeletion, setFeedbackDeletion] = useState('');
   const [availability, setAvailability] = useState<{
     quota: { APIID: string; RemainingQuota: number }[] | null;
     archive: boolean;
@@ -1071,6 +1072,18 @@ export default function Workspace() {
     } catch (e) {
       setError(e instanceof Error ? e.message : '研究记录删除失败。');
     }
+  }
+
+  async function removeSessionFeedback() {
+    if (busy || !window.confirm('删除当前会话提交的全部反馈？研究版本和匿名用量统计不会删除。此操作不能撤销。')) return;
+    setBusy(true);
+    setFeedbackDeletion('');
+    try {
+      const result = await request<{ removed: number }>('/api/branches/feedback', { method: 'DELETE' });
+      setFeedbackDeletion(`已删除 ${result.removed} 条当前会话反馈。`);
+    } catch (e) {
+      setFeedbackDeletion(e instanceof Error ? e.message : '反馈删除失败，请重试。');
+    } finally { setBusy(false); }
   }
 
   async function openArchive() {
@@ -1674,8 +1687,16 @@ export default function Workspace() {
                     完成的探索会自动保存在当前浏览器的快速历史，最多 20 条；点击“保存研究版本”会在本服务保存研究版本，最多 60 条，可分别从对应入口删除。{availability?.privateResearch ? '服务端版本按当前浏览器会话隔离，保留最多30天；清除会话后将无法找回。' : '开发环境的服务端研究记录尚未按访问者隔离。'}
                   </p>
                   <p className="meta">
-                    搜索查询及返回片段会在服务端缓存复用 24 小时。用量日志只保存调用状态、来源数、模型、token 和错误类型，不保存你的问题原文；提交反馈时会单独保存问题概要。这些日志不会随研究记录删除，外部服务还会按各自的数据政策处理收到的内容。
+                    新搜索缓存以查询摘要值检索返回片段，有效期24小时；旧缓存可能保留查询原文。用量日志只保存调用状态、来源数、模型、token 和错误类型，不保存你的问题原文；提交反馈时会单独保存问题概要。{availability?.privateResearch ? '本会话反馈保留最多30天，可单独删除。' : '开发环境反馈为共享记录。'}这些数据不会随研究版本删除，外部服务还会按各自的数据政策处理收到的内容。
                   </p>
+                  {availability?.privateResearch && (
+                    <>
+                      <button className="secondary" type="button" disabled={busy} onClick={() => void removeSessionFeedback()}>
+                        <Trash2 size={15} /> 删除本会话反馈
+                      </button>
+                      {feedbackDeletion && <output className="meta">{feedbackDeletion}</output>}
+                    </>
+                  )}
                 </details>
               </section>
               {availability?.archive && (

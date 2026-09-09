@@ -296,6 +296,13 @@ export function localApi(options = {}) {
             }
           }
           if (
+            req.method === 'DELETE' &&
+            url.pathname === '/api/branches/feedback'
+          ) {
+            if (!production) return send(res, 409, { error: '开发环境共享反馈无法按会话删除。' });
+            return send(res, 200, { removed: await researchStore.removeFeedback(owner) });
+          }
+          if (
             req.method === 'POST' &&
             url.pathname === '/api/branches/feedback'
           ) {
@@ -314,13 +321,16 @@ export function localApi(options = {}) {
                 typeof input?.jobId === 'string' && input.jobId
                   ? input.jobId.slice(0, 64)
                   : null;
-              await addFeedback({
+              reserve(req, { searches: 0, models: 0 });
+              const feedbackRecord = {
                 id: randomUUID(),
                 rating,
                 comment,
                 question,
                 jobId,
-              });
+              };
+              if (production) await researchStore.addFeedback(feedbackRecord, owner);
+              else await addFeedback(feedbackRecord);
               return send(res, 200, { ok: true });
             } catch (e) {
               return send(res, 400, { error: e.message || '反馈提交失败。' });
@@ -338,7 +348,7 @@ export function localApi(options = {}) {
             if (!authAdmin(req, runtimeEnv))
               return send(res, 401, { error: '管理密码错误或未登录。' });
             await ensureQuota();
-            const feedback = await listFeedback();
+            const feedback = production ? await researchStore.listAllFeedback() : await listFeedback();
             const usage = await listUsage();
             const today = localDay(Date.now());
             const ok = usage.filter((u) => u.ok);

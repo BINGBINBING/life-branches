@@ -65,7 +65,7 @@ npm run build
 
 ## 管理后台与用户反馈
 
-- 结果页右栏提供 1–5 星评分与可选评论；数据写入 `.local/feedback.jsonl`。
+- 结果页右栏提供 1–5 星评分与可选评论；开发环境写入 `.local/feedback.jsonl`，生产环境写入会话隔离数据库，保留30天/每会话100条。首页“数据保存范围”可删除当前会话反馈，不删除研究版本或匿名用量。旧开发反馈不自动迁移。
 - 每次探索（含失败）记一条用量：次数、来源数、provider/模型、token 用量与错误类型，写入 `.local/usage.jsonl`；不记录用户问题原文。
 - 管理页面位于 `/admin`：概览指标、token 汇总、知乎实时额度、反馈列表与最近使用记录。管理密码读取 `ADMIN_PASSWORD`；仅开发环境未设置时回退 `life-branches-dev`，生产环境未设置则关闭管理接口。
 - 顶栏「开发者密钥」面板只在非生产环境且通过本机回环地址访问时开放，可临时注入知乎 Access Secret 与分析 AI Key；公网主机名访问时入口和接口均关闭。密钥仅存服务进程内存，刷新 / 重启即失效。
@@ -102,7 +102,8 @@ records. Tests verify restoration, isolation, expiry and the 60-version ceiling
 using synthetic data. Snapshots contain private content: never commit them;
 restrict backup access and retention. Restoring an old snapshot can resurrect
 deleted records; reconcile deletion requests before serving it. This does not
-back up budgets, feedback, search cache or logs. No offsite schedule is configured.
+back up budgets, search cache or logs. Production feedback shares this snapshot
+and its deletion-restoration caveat. No offsite schedule is configured.
 
 Production API requests (`NODE_ENV=production`) reserve worst-case calls before
 running: initial intake reserves one model call; new research reserves five

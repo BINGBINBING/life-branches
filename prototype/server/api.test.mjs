@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { join } from 'node:path';
 import {
   developerToolsAllowed,
   localApi,
@@ -27,6 +28,26 @@ function createHandler(options = {}) {
 }
 
 const handler = createHandler();
+
+test('production feedback deletion only removes the current session feedback', async () => {
+  const { mkdtemp, rm } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const directory = await mkdtemp(join(tmpdir(), 'feedback-api-'));
+  try {
+    const target = createHandler({ env: { NODE_ENV: 'production' }, researchStorePath: join(directory, 'research.sqlite'), budgetPath: join(directory, 'budget.sqlite') });
+    const a = await call('/api/branches/feedback', 'POST', { rating: 4, comment: '虚构反馈A' }, 'https://example.test', target, 'example.test');
+    const b = await call('/api/branches/feedback', 'POST', { rating: 3, comment: '虚构反馈B' }, 'https://example.test', target, 'example.test');
+    assert.equal(a.status, 200);
+    assert.equal(b.status, 200);
+    for (const session of [a, b]) {
+      const cookie = session.headers['Set-Cookie'].split(';')[0];
+      const removed = await call('/api/branches/feedback', 'DELETE', {}, 'https://example.test', target, 'example.test', cookie);
+      assert.equal(removed.value.removed, 1);
+      assert.equal((await call('/api/branches/feedback', 'DELETE', {}, 'https://example.test', target, 'example.test', cookie)).value.removed, 0);
+    }
+    assert.equal((await call('/api/branches/feedback', 'DELETE')).status, 409);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
 async function call(
   url,
   method = 'POST',

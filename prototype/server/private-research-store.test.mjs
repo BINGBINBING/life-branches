@@ -20,6 +20,11 @@ test('private research persists across connections without cross-owner access', 
     assert.equal(await a.remove(first.id, 'owner-a'), true);
     assert.equal(await b.get(first.id, 'owner-a'), null);
     assert.ok(await a.get(second.id, 'owner-b'));
+    await a.addFeedback({ id: 'f-a', comment: '会话A反馈' }, 'owner-a');
+    await b.addFeedback({ id: 'f-b', comment: '会话B反馈' }, 'owner-b');
+    assert.equal(await a.removeFeedback('owner-a'), 1);
+    assert.deepEqual((await b.listAllFeedback()).map((item) => item.id), ['f-b']);
+    assert.equal(await a.removeFeedback('owner-a'), 0);
   } finally { a.close(); b.close(); rmSync(directory, { recursive: true, force: true }); }
 });
 
