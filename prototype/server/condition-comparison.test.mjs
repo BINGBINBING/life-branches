@@ -5,10 +5,20 @@ import {
   compareConditionEvidence,
   questionsFromComparisons,
   selectDynamicQuestions,
+  parseUserCondition,
 } from './condition-comparison.mjs';
 
 const validQuote = (source, quote) =>
   source.snippets.some((text) => text.includes(quote)) ? quote : '';
+
+test('user-side parsing rejects cross-frequency and reversed rank meanings', () => {
+  assert.equal(parseUserCondition('daily_time', '每周14小时'), null);
+  assert.equal(parseUserCondition('weekly_hours', '每天2小时'), null);
+  assert.equal(parseUserCondition('rank_percentile', '专业后15%'), null);
+  assert.equal(parseUserCondition('rank_position', '前15%'), null);
+  assert.equal(parseUserCondition('rank_position', '倒数第15名'), null);
+  assert.equal(parseUserCondition('rank_position', '第15名').normalized, 15);
+});
 
 test('dynamic candidate pool retains all fields and selects eight by decision relevance', () => {
   const ids = COMPARABLE_CONDITIONS.major_transition;

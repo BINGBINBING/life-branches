@@ -110,6 +110,7 @@ const parsers = {
     return categorical(display, display);
   },
   daily_time(text, mode) {
+    if (/每周|一周|小时\/周/.test(String(text))) return null;
     const found = dailyHours(text);
     if (found)
       return { normalized: found.value, display: `${found.value}小时/天` };
@@ -120,6 +121,7 @@ const parsers = {
       : null;
   },
   weekly_hours(text, mode) {
+    if (/每天|每日|小时\/天/.test(String(text))) return null;
     return exactNumber(
       text,
       mode === 'source'
@@ -171,6 +173,7 @@ const parsers = {
   },
   rank_percentile(text, mode) {
     const value = String(text || '');
+    if (/后\s*\d|倒数/.test(value)) return null;
     const pattern =
       mode === 'source'
         ? /(?:排名|位于|专业|年级|班级)[^，。]{0,12}?(?:前\s*)?([0-9]+(?:\.[0-9]+)?)\s*%/
@@ -181,6 +184,7 @@ const parsers = {
       : null;
   },
   rank_position(text, mode) {
+    if (/%|百分|倒数|后\s*\d/.test(String(text))) return null;
     return exactNumber(
       text,
       mode === 'source'
@@ -368,6 +372,8 @@ function gpaScale(text, allowBare = false) {
     /(?:\/\s*|(?:满分|分制)(?:是|为)?\s*)(4(?:\.0)?|5(?:\.0)?|100)(?:\s*分)?/,
   );
   if (match) return Number(match[1]);
+  const suffixScale = value.match(/(4(?:\.0)?|5(?:\.0)?|100)\s*分制/);
+  if (suffixScale) return Number(suffixScale[1]);
   if (!allowBare) return null;
   const bare = value.match(/^\s*(4(?:\.0)?|5(?:\.0)?|100)\s*(?:分制|分)?\s*$/);
   return bare ? Number(bare[1]) : null;
