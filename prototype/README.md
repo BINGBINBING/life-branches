@@ -136,3 +136,7 @@ DeepSeek quota. They cover initial intake, confirmation before research,
 results, multi-question dialog, draft retention and batch rematching at desktop
 and two mobile sizes. Screenshots stay in ignored `.local/browser-test-results`.
 These controlled checks do not replace real-service or cross-browser acceptance.
+
+The `miniflare` transitive `sharp` dependency is overridden to `0.35.4` to
+address GHSA-rgj7-g3m4-5g8c without downgrading the Cloudflare toolchain.
+Revisit this override when upstream updates its pinned dependency.
