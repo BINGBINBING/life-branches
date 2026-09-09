@@ -8,6 +8,7 @@ import { searchStopReason } from './search-policy.mjs';
 import { markDuplicateSources } from './source-duplicates.mjs';
 import { researchCoverage } from './research-coverage.mjs';
 import { reviewSummaries } from './summary-review.mjs';
+import { hasObservableAction } from './action-evidence.mjs';
 import { dictionaryIndex } from './condition-dictionary.mjs';
 import {
   COMPARABLE_CONDITIONS,
@@ -632,6 +633,7 @@ export function validateAnalysis(raw, sources, profile) {
     pathMismatch: 0,
     missingActionCitation: 0,
     invalidInsightCitation: 0,
+    unverifiedAction: 0,
   };
   let citationAttempts = 0;
   let citationPasses = 0;
@@ -665,6 +667,12 @@ export function validateAnalysis(raw, sources, profile) {
         sourceReasons.set(source.id, '行动引文未通过片段校验');
         rejected++;
         rejectionReasons.missingActionCitation++;
+        continue;
+      }
+      if (!hasObservableAction(action.quote)) {
+        rejected++;
+        rejectionReasons.unverifiedAction++;
+        sourceReasons.set(source.id, '未识别到可观察行动，仅有态度、意向或行动语义待核实');
         continue;
       }
       citationPasses++;

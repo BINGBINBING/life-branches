@@ -28,6 +28,15 @@ test('unselected sources keep an explicit unknown reason rather than invented re
   assert.match(result.sourceDispositions[0].reason, /尚未核实/);
 });
 
+test('quoted attitude is not promoted into an observable action', () => {
+  const quote = '我做了重要决定，从未后悔';
+  const result = validateAnalysis({ paths: [{ cases: [{ sourceId: 'S1', action: { text: '做出决定', quote } }] }] },
+    [{ id: 'S1', title: '转行经历', snippets: [quote] }], profile);
+  assert.equal(result.paths.length, 0);
+  assert.equal(result.rejectionReasons.unverifiedAction, 1);
+  assert.equal(result.insights.length, 0);
+});
+
 test('missing basics generate questions without fabricated evidence', () => {
   const input = { decisionPath: 'campus_transfer', conditionAnswers: { institution_name: '尚未核实' } };
   const questions = researchQuestions([], input);

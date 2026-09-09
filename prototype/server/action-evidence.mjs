@@ -1,0 +1,7 @@
+export function hasObservableAction(quote) {
+  return String(quote || '').split(/[，。；！？\n]/).some((clause) => {
+    if (/计划|打算|想要|希望|建议|应该|如果|假如|可以考虑|尚未|没有|没能|未曾|不打算/.test(clause)) return false;
+    return /(?:学习|学了|上课|练习|复习|自学|旁听|补修|修读|选修|投递|提交|申请|报考|面试|竞聘|求职|实习|兼职|裸辞|辞职|转岗|培训|咨询|查阅|核对|撰写|整理|调整选课)/.test(clause) ||
+      /(?:做了?|完成|开发|搭建|上线|部署).{0,16}(?:项目|作品|课程|网页|网站|系统)/.test(clause);
+  });
+}
