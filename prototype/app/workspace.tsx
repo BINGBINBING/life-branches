@@ -1985,6 +1985,14 @@ export default function Workspace() {
             </section>
           ) : (
             <>
+              {job?.result?.coverage && (
+                <section aria-label="研究覆盖范围">
+                  <h2>本次研究覆盖</h2>
+                  <p>{job.result.coverage.sourceCount} 个来源 · {job.result.coverage.duplicateCount} 个重复来源 · {job.result.coverage.acceptedCount} 个入选案例 · {job.result.coverage.pathCount} 条行动路径</p>
+                  {job.result.coverage.gaps.map((gap) => <p className="meta" key={gap}>{gap}</p>)}
+                  <p className="meta">这些只是当前检索样本，未找到不代表不存在，数量不能用于推算成功率。</p>
+                </section>
+              )}
               {job?.profile.researchMode === 'general' && (
                 <output className="error-banner">
                   <CircleHelp size={20} />

@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs';
 import { deepseekJSON } from './deepseek.mjs';
 import { searchStopReason } from './search-policy.mjs';
 import { markDuplicateSources } from './source-duplicates.mjs';
+import { researchCoverage } from './research-coverage.mjs';
 import { dictionaryIndex } from './condition-dictionary.mjs';
 import {
   COMPARABLE_CONDITIONS,
@@ -769,6 +770,7 @@ export function validateAnalysis(raw, sources, profile) {
       accepted: seen.has(source.id),
       reason: seen.has(source.id) ? '已纳入详细案例' : source.duplicateOf ? `与 ${source.duplicateOf} 内容重复，不作为独立案例` : sourceReasons.get(source.id) || '未入选详细分析；可能受案例数量限制或模型选择影响，具体内容价值尚未核实',
     })),
+    coverage: researchCoverage(sources, paths),
     rejected,
     rejectionReasons,
     citationPassRate: citationAttempts
@@ -836,6 +838,7 @@ export function rematchAnalysis(previous, sources, profile) {
     insights: buildDecisionInsights(paths, previous.insights || []),
     questions: researchQuestions(questions, profile),
     analyzedAt: Date.now(),
+    coverage: researchCoverage(sources, paths),
     decisionClassification:
       profile.decisionScope === 'career_transition'
         ? classifyCareerMove(profile)
@@ -859,7 +862,8 @@ export async function analyze(sources, profile, progress, options = {}) {
     return {
       paths: [],
       insights: [],
-      questions: [],
+      questions: researchQuestions([], profile),
+      coverage: researchCoverage([], []),
       rejected: 0,
       analyzedAt: Date.now(),
     };

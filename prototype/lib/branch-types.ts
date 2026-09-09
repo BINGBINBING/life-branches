@@ -142,6 +142,7 @@ export type Question = {
   options: string[];
 };
 export type Analysis = {
+  coverage?: { sourceCount: number; duplicateCount: number; acceptedCount: number; pathCount: number; gaps: string[] };
   sourceDispositions?: { sourceId: string; accepted: boolean; reason: string }[];
   researchMode?: 'general' | 'personalized';
   missingRequired?: string[];
