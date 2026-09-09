@@ -3,6 +3,10 @@ export function summaryHasSupport(summary, quote) {
   const numbers = summary.match(/\d+(?:\.\d+)?%?/g) || [];
   const sourceNumbers = new Set(quote.match(/\d+(?:\.\d+)?%?/g) || []);
   if (numbers.some((number) => !sourceNumbers.has(number))) return false;
+  const quantities = (text) => [...text.matchAll(/(\d+(?:\.\d+)?)\s*(?:个)?\s*(小时|分钟|个月|年|月|周|天|万元|元|%|学分|学期)/g)]
+    .map((match) => `${Number(match[1])}:${match[2] === '个月' ? '月' : match[2]}`);
+  const sourceQuantities = new Set(quantities(quote));
+  if (quantities(summary).some((quantity) => !sourceQuantities.has(quantity))) return false;
   for (const token of summary.match(/博士|硕士|本科|大专|专科|高中|中专/g) || [])
     if (!quote.includes(token)) return false;
   if (/每天|每日|小时\/天/.test(summary) && !/每天|每日|小时\/天/.test(quote)) return false;

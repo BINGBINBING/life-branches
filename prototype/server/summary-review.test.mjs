@@ -66,6 +66,17 @@ test('unsupported hard facts cannot reach the reviewer even when it would approv
   assert.equal(review.status, 'no_candidates');
 });
 
+test('equal numbers with different units do not establish summary support', () => {
+  for (const [summary, quote] of [
+    ['投入2年', '每天投入2小时'],
+    ['准备6周', '准备6个月'],
+    ['成本3万元', '投入3小时'],
+    ['完成4学分', '完成4个项目'],
+  ]) assert.equal(summaryHasSupport(summary, quote), false);
+  assert.equal(summaryHasSupport('准备6个月', '我准备了6个月'), true);
+  assert.equal(summaryHasSupport('每天练习2小时', '我每天练习2 小时'), true);
+});
+
 test('malformed collections are skipped without losing valid summary candidates', async () => {
   for (const invalid of [null, 'wrong', 42, {}]) {
     const { result, raw } = fixture();
