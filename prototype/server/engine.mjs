@@ -7,6 +7,8 @@ import { deepseekJSON } from './deepseek.mjs';
 import { searchStopReason } from './search-policy.mjs';
 import { markDuplicateSources } from './source-duplicates.mjs';
 import { researchCoverage } from './research-coverage.mjs';
+import { researchReadiness } from './research-readiness.mjs';
+export { researchReadiness } from './research-readiness.mjs';
 import { reviewSummaries } from './summary-review.mjs';
 import { hasObservableAction } from './action-evidence.mjs';
 import { classifyContent } from './content-kind.mjs';
@@ -281,26 +283,6 @@ export function profileText(profile) {
   ]
     .filter(Boolean)
     .join('\n');
-}
-
-const requiredConditions = {
-  campus_transfer: ['institution_name', 'current_major', 'target_major'],
-  cross_major_graduate: ['current_major', 'target_major'],
-  minor: ['institution_name', 'current_major', 'target_major'],
-  second_bachelor: ['institution_name', 'current_major', 'target_major'],
-  career_change: ['current_job_function', 'target_job_function'],
-};
-
-export function researchReadiness(profile) {
-  const required = requiredConditions[profile.decisionPath] || [];
-  const missingRequired = required.filter(
-    (id) => !profile.conditionAnswers?.[id]?.trim() ||
-      /^(?:未知|尚未核实|不清楚|不知道|待确认)$/.test(profile.conditionAnswers[id].trim()),
-  );
-  return {
-    researchMode: !required.length || missingRequired.length ? 'general' : 'personalized',
-    missingRequired,
-  };
 }
 
 export function researchQuestions(candidates, profile) {

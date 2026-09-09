@@ -1,5 +1,6 @@
 import { candidateConditions, conditions } from './condition-dictionary.mjs';
 import { deepseekJSON } from './deepseek.mjs';
+import { requiredConditionIds } from './research-readiness.mjs';
 import {
   parseSourceCondition,
   parseUserCondition,
@@ -340,6 +341,7 @@ export function normalizeIntake(question, raw = {}) {
     ...prefilled,
     ...extracted.keys(),
     ...conflicts,
+    ...requiredConditionIds(path),
     ...anchors,
     ...requested,
     ...fallback,

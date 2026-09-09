@@ -381,3 +381,13 @@ test('conflicting extracted values stay unanswered instead of last-value-wins', 
     assert.equal(result.fields.find((field) => field.id === conditionId)?.initialValue, undefined, question);
   }
 });
+
+test('model suggestions cannot displace core questions before the first search', () => {
+  const plan = normalizeIntake('我现在做运营，想转行软件开发。朋友每天学习8小时，我每天只能投入2小时。', {
+    scope: 'career_transition', fieldIds: ['weekly_hours', 'transferable_tools', 'coding_debugging', 'job_region', 'trial_completed', 'income_gap_months'],
+    extracted: [{ conditionId: 'target_industry', value: '软件开发', quote: '想转行软件开发' }],
+  });
+  assert.ok(plan.fields.some((field) => field.id === 'current_job_function'));
+  assert.ok(plan.fields.some((field) => field.id === 'target_job_function'));
+  assert.ok(plan.fields.filter((field) => !field.initialValue).length <= 6);
+});
