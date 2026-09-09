@@ -111,6 +111,17 @@ test('batch follow-up submission rematches once locally and reuses all sources',
   assert.equal(job.result.analysis.provider, 'local');
   assert.equal(job.metrics.stages.filter((stage) => stage.stage === 'analysis').length, 1);
 });
+
+test('all query variants bound long target values and omit unknown placeholders', () => {
+  const profile = { decisionScope: 'career_transition', decisionPath: 'career_change',
+    question: '私人叙述不应进入搜索',
+    conditionAnswers: { target_job_function: '前端'.repeat(200), target_industry: '尚未核实' },
+  };
+  const queries = [...searchQueries(profile), adaptiveFollowupQuery(profile,
+    Array.from({ length: 4 }, (_, i) => ({ title: `不相关${i}`, snippets: ['别的行业经历'] })))];
+  assert.ok(queries.every((q) => q.length < 350));
+  assert.ok(queries.every((q) => !q.includes('尚未核实') && !q.includes(profile.question)));
+});
 test('production never falls back to the development admin password', () => {
   assert.equal(resolveAdminPassword({ NODE_ENV: 'production' }), null);
   assert.equal(

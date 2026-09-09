@@ -421,6 +421,7 @@ export function searchQueries(profile) {
         ];
   const formContext = Object.entries(profile.conditionAnswers || {})
     .filter(([id]) => hardConditionIds.includes(id))
+    .filter(([, answer]) => !/^(?:未知|尚未核实|不清楚|不知道|待确认)$/.test(String(answer).trim()))
     .slice(0, 4)
     .map(([id, answer]) => {
       const item = dictionaryIndex.get(id);
@@ -481,8 +482,8 @@ export function adaptiveFollowupQuery(profile, sources) {
       ? ['institution_name', 'target_major']
       : ['target_industry', 'target_job_function'];
   const terms = targetIds
-    .map((id) => profile.conditionAnswers?.[id]?.trim())
-    .filter((term) => term && term.length >= 2);
+    .map((id) => profile.conditionAnswers?.[id]?.trim().slice(0, 40))
+    .filter((term) => term && term.length >= 2 && !/^(?:未知|尚未核实|不清楚|不知道|待确认)$/.test(term));
   if (terms.length) {
     const relevant = sources.filter((source) => {
       const text = [source.title, ...source.snippets].join('\n');
@@ -581,6 +582,12 @@ export async function search(
       });
     results.push({ query, data: data.data });
     const currentSources = aggregate(results);
+    onMetric({
+      stage: 'query_result', round: index + 1, query,
+      purpose: ['行动路径与硬条件', '根据首轮缺口补充', '阶段结果', '限制与成本', '后续回顾'][index],
+      returnedCount: data.data.Data?.Items?.length || 0,
+      sourceCount: currentSources.length,
+    });
     onSources(currentSources);
     if (index === 0)
       queries[1] = adaptiveFollowupQuery(profile, currentSources);

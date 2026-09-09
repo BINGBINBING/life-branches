@@ -2506,6 +2506,18 @@ export default function Workspace() {
                   </div>
                 </details>
               )}
+              {!!job?.metrics?.stages.some((stage) => stage.stage === 'query_result') && (
+                <details className="sources-section">
+                  <summary>本次查询记录 <ChevronDown size={16} /></summary>
+                  {job.metrics.stages.filter((stage) => stage.stage === 'query_result').map((stage, index) => (
+                    <section key={index}>
+                      <h3>第 {String(stage.round)} 轮 · {String(stage.purpose)}</h3>
+                      <p>{String(stage.query)}</p>
+                      <p className="meta">返回 {String(stage.returnedCount)} 条，累计去重后 {String(stage.sourceCount)} 个来源。</p>
+                    </section>
+                  ))}
+                </details>
+              )}
               <footer className="workspace-footer">
                 <ShieldCheck size={15} />
                 <span>依据搜索片段整理 · 非完整原文 · 不代表成功率</span>
