@@ -34,9 +34,11 @@ async function call(
   origin = 'http://localhost:4317',
   targetHandler = handler,
   host = 'localhost:4317',
+  cookie = '',
 ) {
   let status;
   let value;
+  const responseHeaders = {};
   const req = {
     url,
     method,
@@ -44,12 +46,14 @@ async function call(
       host,
       origin,
       'content-type': 'application/json',
+      cookie,
     },
     async *[Symbol.asyncIterator]() {
       yield JSON.stringify(payload);
     },
   };
   const res = {
+    setHeader(name, value) { responseHeaders[name] = value; },
     writeHead(code) {
       status = code;
     },
@@ -58,7 +62,7 @@ async function call(
     },
   };
   await targetHandler(req, res, () => {});
-  return { status, value };
+  return { status, value, headers: responseHeaders };
 }
 test('historical archive keeps three validated cases and is explicitly curated', () => {
   const archive = curatedArchive();
@@ -91,6 +95,19 @@ test('cross-origin mutations are rejected', async () => {
       .status,
     403,
   );
+});
+
+test('production jobs are isolated by a secure anonymous session cookie', async () => {
+  const production = createHandler({ env: { NODE_ENV: 'production' } });
+  const opened = await call('/api/branches/archive', 'POST', {}, 'https://example.test', production, 'example.test');
+  assert.equal(opened.status, 200);
+  const cookie = opened.headers['Set-Cookie'].split(';')[0];
+  assert.match(opened.headers['Set-Cookie'], /HttpOnly; Secure; SameSite=Strict/);
+  const url = `/api/branches/jobs/${opened.value.id}`;
+  assert.equal((await call(url, 'GET', {}, 'https://example.test', production, 'example.test', cookie)).status, 200);
+  assert.equal((await call(url, 'GET', {}, 'https://example.test', production, 'example.test')).status, 404);
+  const unauthorized = await call('/api/branches/explore', 'POST', { profile: opened.value.profile, previousId: opened.value.id }, 'https://example.test', production, 'example.test');
+  assert.equal(unauthorized.status, 400);
 });
 
 test('batch follow-up submission rematches once locally and reuses all sources', async () => {

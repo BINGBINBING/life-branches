@@ -72,6 +72,18 @@ npm run build
 - 存储实现见 `server/storage.mjs`；上云时替换为同接口的 KV/数据库实现，数据文件与密钥不进入仓库（`.local/`、`.env*` 均已忽略）。
 # Production Call Budget
 
+Production research versions use `.local/private-research.sqlite`, separate from
+development JSON records. A Secure, HttpOnly, SameSite=Strict anonymous browser
+cookie scopes listing, reading, deletion and job reuse. Serve production over
+HTTPS. Clearing this cookie loses access; this is not a registered account or
+cross-device identity. Research versions expire after 30 days (purged on storage
+access), with at most 60 versions and 8 MiB per session. Existing development
+records are not automatically imported. Use one persistent local database volume;
+independent hosts need a shared database service before horizontal deployment.
+Deletion covers that research version, not browser history, shared search cache,
+feedback or operational logs. Offsite backup and restoration procedures remain a
+deployment requirement; no backup is uploaded by this code.
+
 Production API requests (`NODE_ENV=production`) reserve worst-case calls before
 running: initial intake reserves one model call; new research reserves five
 search calls and two model calls; local rematching reserves no external calls.

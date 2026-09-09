@@ -1,4 +1,5 @@
-import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomUUID, randomBytes, createHash, timingSafeEqual } from 'node:crypto';
+import { createPrivateResearchStore } from './private-research-store.mjs';
 import { conditionHistory } from './condition-history.mjs';
 import { createUsageGate } from './usage-gate.mjs';
 import { readFile } from 'node:fs/promises';
@@ -89,9 +90,10 @@ async function body(req) {
 }
 
 export function localApi(options = {}) {
-  const researchStore = createResearchStore(options.researchStorePath);
   const telemetry = createTelemetry(options.telemetryPath);
   const runtimeEnv = options.env || process.env;
+  const production = runtimeEnv.NODE_ENV === 'production';
+  const researchStore = production ? createPrivateResearchStore(options.researchStorePath) : createResearchStore(options.researchStorePath);
   const gate = createUsageGate({ file: options.budgetPath });
   const reserve = (req, cost) => {
     if (runtimeEnv.NODE_ENV === 'production')
@@ -107,6 +109,15 @@ export function localApi(options = {}) {
           const origin = req.headers.origin;
           if (origin && new URL(origin).host !== req.headers.host)
             return send(res, 403, { error: '不支持跨站请求。' });
+          let owner = 'local-development';
+          if (production) {
+            let token = String(req.headers.cookie || '').match(/(?:^|;\s*)__Host-life-branches=([a-f0-9]{64})(?:;|$)/)?.[1];
+            if (!token) {
+              token = randomBytes(32).toString('hex');
+              res.setHeader('Set-Cookie', `__Host-life-branches=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=2592000`);
+            }
+            owner = createHash('sha256').update(token).digest('hex');
+          }
           if (req.method === 'GET' && url.pathname === '/api/branches/health') {
             await ensureQuota();
             let archive = true;
@@ -127,13 +138,14 @@ export function localApi(options = {}) {
                 ) ?? null,
               archive,
               developerTools: developerToolsAllowed(req, runtimeEnv),
+              privateResearch: production,
             });
           }
           if (
             req.method === 'GET' &&
             url.pathname === '/api/branches/researches'
           ) {
-            return send(res, 200, { records: await researchStore.list() });
+            return send(res, 200, { records: await researchStore.list(owner) });
           }
           if (
             req.method === 'GET' &&
@@ -145,7 +157,7 @@ export function localApi(options = {}) {
             /^\/api\/branches\/researches\/([^/]+)$/,
           );
           if (researchMatch && req.method === 'GET') {
-            const record = await researchStore.get(researchMatch[1]);
+            const record = await researchStore.get(researchMatch[1], owner);
             if (!record)
               return send(res, 404, { error: '这条研究记录不存在。' });
             const restored = {
@@ -158,7 +170,7 @@ export function localApi(options = {}) {
             return send(res, 200, restored);
           }
           if (researchMatch && req.method === 'DELETE') {
-            const removed = await researchStore.remove(researchMatch[1]);
+            const removed = await researchStore.remove(researchMatch[1], owner);
             return removed
               ? send(res, 200, { ok: true })
               : send(res, 404, { error: '这条研究记录不存在。' });
@@ -169,7 +181,8 @@ export function localApi(options = {}) {
           ) {
             const input = await body(req);
             const job = jobs.get(input?.jobId);
-            return send(res, 201, await researchStore.save(job));
+            if (production && job?.owner !== owner) return send(res, 404, { error: '研究不存在。' });
+            return send(res, 201, await researchStore.save(job, owner));
           }
           if (
             req.method === 'POST' &&
@@ -227,6 +240,7 @@ export function localApi(options = {}) {
                 id: randomUUID(),
                 createdAt: Date.now(),
                 historical: true,
+                owner,
               };
               for (const [id, old] of jobs)
                 if (Date.now() - old.createdAt > 3600000) jobs.delete(id);
@@ -245,7 +259,7 @@ export function localApi(options = {}) {
             url.pathname.startsWith('/api/branches/jobs/')
           ) {
             const job = jobs.get(url.pathname.split('/').pop());
-            if (!job || Date.now() - job.createdAt > 3600000)
+            if (!job || (production && job.owner !== owner) || Date.now() - job.createdAt > 3600000)
               return send(res, 404, { error: '这次探索已过期，请重新搜索。' });
             return send(res, 200, job);
           }
@@ -397,6 +411,7 @@ export function localApi(options = {}) {
           if (
             input.previousId &&
             (!previous ||
+              (production && previous.owner !== owner) ||
               Date.now() - previous.createdAt > 3600000 ||
               previous.profile.question !== profile.question)
           )
@@ -422,6 +437,7 @@ export function localApi(options = {}) {
           const job = {
             id: randomUUID(),
             status: 'running',
+            owner,
             progress: '正在准备检索…',
             createdAt: Date.now(),
             profile,

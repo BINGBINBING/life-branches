@@ -978,6 +978,7 @@ export default function Workspace() {
     quota: { APIID: string; RemainingQuota: number }[] | null;
     archive: boolean;
     developerTools: boolean;
+    privateResearch?: boolean;
   } | null>(null);
   const [showKeys, setShowKeys] = useState(false);
   const [zhihuKeyDraft, setZhihuKeyDraft] = useState('');
@@ -1670,7 +1671,7 @@ export default function Workspace() {
                 <details className="quote-details">
                   <summary>数据保存范围 <ChevronDown size={13} /></summary>
                   <p className="meta">
-                    完成的探索会自动保存在当前浏览器的快速历史，最多 20 条；点击“保存研究版本”会在本服务保存研究版本，最多 60 条，可分别从对应入口删除。当前服务的研究记录尚未按访问者隔离。
+                    完成的探索会自动保存在当前浏览器的快速历史，最多 20 条；点击“保存研究版本”会在本服务保存研究版本，最多 60 条，可分别从对应入口删除。{availability?.privateResearch ? '服务端版本按当前浏览器会话隔离，保留最多30天；清除会话后将无法找回。' : '开发环境的服务端研究记录尚未按访问者隔离。'}
                   </p>
                   <p className="meta">
                     搜索查询及返回片段会在服务端缓存复用 24 小时。用量日志只保存调用状态、来源数、模型、token 和错误类型，不保存你的问题原文；提交反馈时会单独保存问题概要。这些日志不会随研究记录删除，外部服务还会按各自的数据政策处理收到的内容。
@@ -1701,7 +1702,7 @@ export default function Workspace() {
                     <h2>服务端研究版本</h2>
                     <span className="meta">{records.length}</span>
                   </div>
-                  <p className="meta">保存在运行本网站的服务器，不是访问者的电脑。当前尚未按访问者隔离；删除不影响浏览器快速历史。</p>
+                  <p className="meta">保存在运行本网站的服务器，不是访问者的电脑。{availability?.privateResearch ? '按当前会话隔离，最多保留30天。' : '开发环境尚未按访问者隔离。'}删除不影响浏览器快速历史。</p>
                   {records.map((record) => (
                     <article key={record.id}>
                       <button
