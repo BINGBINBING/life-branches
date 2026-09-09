@@ -92,6 +92,25 @@ test('cross-origin mutations are rejected', async () => {
     403,
   );
 });
+
+test('batch follow-up submission rematches once locally and reuses all sources', async () => {
+  const archive = (await call('/api/branches/archive')).value;
+  const submitted = {
+    ...archive.profile,
+    conditionAnswers: { ...archive.profile.conditionAnswers, daily_time: '2小时/天', current_job_function: '运营', target_job_function: '开发' },
+    answers: { '每天多久？': '2小时/天', '当前岗位？': '运营' },
+  };
+  const created = await call('/api/branches/explore', 'POST', { profile: submitted, previousId: archive.id });
+  assert.equal(created.status, 202);
+  const job = (await call(`/api/branches/jobs/${created.value.id}`, 'GET')).value;
+  assert.equal(job.status, 'done');
+  assert.equal(job.reused, true);
+  assert.deepEqual(job.sources, archive.sources);
+  assert.deepEqual(job.profile.conditionAnswers, submitted.conditionAnswers);
+  assert.equal(job.metrics.searchCalls, 0);
+  assert.equal(job.result.analysis.provider, 'local');
+  assert.equal(job.metrics.stages.filter((stage) => stage.stage === 'analysis').length, 1);
+});
 test('production never falls back to the development admin password', () => {
   assert.equal(resolveAdminPassword({ NODE_ENV: 'production' }), null);
   assert.equal(
