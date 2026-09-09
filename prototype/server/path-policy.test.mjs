@@ -112,3 +112,15 @@ test('career cases use stable local action paths', () => {
     ],
   );
 });
+
+test('one academic decision route can contain multiple evidence-based action branches', () => {
+  const cases = [
+    { sourceId: 'S1', action: { quote: '我补修了三门先修课程' } },
+    { sourceId: 'S2', action: { quote: '我参加了转专业面试' } },
+    { sourceId: 'S3', action: { quote: '我做了一个决定' } },
+  ];
+  const paths = groupCasesByPath(cases, { decisionScope: 'major_transition', decisionPath: 'campus_transfer' }, new Map());
+  assert.deepEqual(paths.map((p) => p.actionBranch), ['prerequisite_study', 'assessment_preparation', 'action_unknown']);
+  assert.ok(paths.every((p) => p.decisionRoute === 'campus_transfer'));
+  assert.equal(paths.flatMap((p) => p.cases).length, 3);
+});

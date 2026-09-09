@@ -41,6 +41,12 @@ const careerPaths = [
   },
 ];
 
+const majorActions = [
+  { id: 'prerequisite_study', label: '先修补齐', pattern: /(?:修读|补修|自学|旁听|学完|完成).{0,12}(?:课程|先修|基础|学分)/ },
+  { id: 'assessment_preparation', label: '考核准备', pattern: /(?:准备|练习|参加|复习).{0,12}(?:面试|笔试|考核|考试)/ },
+  { id: 'application_materials', label: '申请材料准备', pattern: /(?:整理|提交|撰写|准备).{0,12}(?:材料|申请书|个人陈述|作品集)/ },
+];
+
 function sourceText(source, action = '') {
   return [source?.title, ...(source?.snippets || []), action]
     .filter(Boolean)
@@ -113,11 +119,8 @@ export function groupCasesByPath(cases, profile, sources) {
   for (const item of cases) {
     let path;
     if (profile.decisionScope === 'major_transition') {
-      const route =
-        majorRoutes[profile.decisionPath] || majorRoutes.campus_transfer;
-      path = {
-        id: profile.decisionPath || 'campus_transfer',
-        label: route.label,
+      path = majorActions.find((candidate) => candidate.pattern.test(item.action?.quote || '')) || {
+        id: 'action_unknown', label: '行动方式待确认',
       };
     } else {
       const text = sourceText(sources.get(item.sourceId), item.action?.quote);
@@ -127,7 +130,8 @@ export function groupCasesByPath(cases, profile, sources) {
       };
     }
     if (!groups.has(path.id))
-      groups.set(path.id, { id: path.id, name: path.label, cases: [] });
+      groups.set(path.id, { id: path.id, name: path.label,
+        decisionRoute: profile.decisionPath || '', actionBranch: path.id, cases: [] });
     groups.get(path.id).cases.push(item);
   }
   return [...groups.values()].slice(0, 7);

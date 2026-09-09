@@ -115,6 +115,8 @@ export type Experience = {
   missing: string[];
 };
 export type Path = {
+  decisionRoute?: string;
+  actionBranch?: string;
   id: string;
   name: string;
   cases: Experience[];
