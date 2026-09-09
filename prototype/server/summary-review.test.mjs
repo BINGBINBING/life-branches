@@ -49,3 +49,19 @@ test('practice and risk summaries share the same bounded review call', async () 
   assert.equal(insight.title, '风险归纳');
   assert.equal(insight.quote, '准备期间中断收入，积蓄很快用完');
 });
+
+test('unsupported hard facts cannot reach the reviewer even when it would approve', async () => {
+  for (const [summary, quote] of [
+    ['每天学习2小时', '每周学习2小时'],
+    ['本科毕业后做项目', '电子信息专业做项目'],
+    ['已成功入职', '我完成了一个项目'],
+    ['已就业', '我还没就业'],
+    ['转专业获批', '申请转专业后毕业'],
+  ]) assert.equal(summaryHasSupport(summary, quote), false, summary);
+  const { result, raw } = fixture();
+  raw.paths[0].cases[0].action.text = '已成功入职';
+  let calls = 0;
+  const review = await reviewSummaries(result, raw, [], async () => { calls++; return { value: { reviews: [{ id: 'S1:action', supported: true }] } }; });
+  assert.equal(calls, 0);
+  assert.equal(review.status, 'no_candidates');
+});

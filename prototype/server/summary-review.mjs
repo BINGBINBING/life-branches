@@ -3,6 +3,17 @@ export function summaryHasSupport(summary, quote) {
   const numbers = summary.match(/\d+(?:\.\d+)?%?/g) || [];
   const sourceNumbers = new Set(quote.match(/\d+(?:\.\d+)?%?/g) || []);
   if (numbers.some((number) => !sourceNumbers.has(number))) return false;
+  for (const token of summary.match(/博士|硕士|本科|大专|专科|高中|中专/g) || [])
+    if (!quote.includes(token)) return false;
+  if (/每天|每日|小时\/天/.test(summary) && !/每天|每日|小时\/天/.test(quote)) return false;
+  if (/每周|一周|小时\/周/.test(summary) && !/每周|一周|小时\/周/.test(quote)) return false;
+  const milestones = [/入职|就业|录用|offer/i, /获批|批准|转入/, /毕业/];
+  for (const pattern of milestones) {
+    if (!pattern.test(summary)) continue;
+    if (!pattern.test(quote)) return false;
+    const negated = (text) => text.split(/[，。；]/).some((clause) => pattern.test(clause) && /没|未|不|无/.test(clause));
+    if (negated(quote) && !negated(summary)) return false;
+  }
   if (/因此|导致|保证|必然|一定能|成功率/.test(summary) && !/因此|导致|保证|必然|一定能|成功率/.test(quote)) return false;
   return true;
 }
