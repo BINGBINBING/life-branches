@@ -364,3 +364,20 @@ test('local and AI prefills reject third-party and requirement context', () => {
   const conflicting = normalizeIntake('我想转行，每天学习2小时，每天学习8小时');
   assert.equal(conflicting.fields.find((field) => field.id === 'daily_time')?.initialValue, undefined);
 });
+
+test('conflicting extracted values stay unanswered instead of last-value-wins', () => {
+  const plan = normalizeIntake('我做运营，也做销售，想转行开发', { extracted: [
+    { conditionId: 'current_job_function', value: '运营', quote: '我做运营' },
+    { conditionId: 'current_job_function', value: '销售', quote: '也做销售' },
+    { conditionId: 'current_job_function', value: '运营', quote: '我做运营' },
+  ] });
+  assert.equal(plan.fields.find((field) => field.id === 'current_job_function')?.initialValue, undefined);
+  for (const [question, conditionId, value, quote] of [
+    ['我想转行，过去做运营', 'current_job_function', '运营', '运营'],
+    ['我想转行，不考虑销售', 'target_job_function', '销售', '销售'],
+    ['我想转专业，以前大一', 'current_stage', '大一', '大一'],
+  ]) {
+    const result = normalizeIntake(question, { extracted: [{ conditionId, value, quote }], fieldIds: [conditionId] });
+    assert.equal(result.fields.find((field) => field.id === conditionId)?.initialValue, undefined, question);
+  }
+});

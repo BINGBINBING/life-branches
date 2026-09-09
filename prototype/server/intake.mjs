@@ -32,6 +32,14 @@ function personalQuote(question, quote) {
   return contexts.length ? contexts.every(personalClause) : personalClause(question);
 }
 
+function currentOrTargetMeaning(question, quote, id) {
+  const clauses = question.split(/[，。；！？\n]/).filter((clause) => clause.includes(quote));
+  const context = clauses.length ? clauses.join('；') : quote;
+  if (id.startsWith('current_') && /过去|以前|曾经|曾在|之前|原来|不是|并非|不再|没做|(?:想|希望|计划|准备).{0,8}(?:成为|从事|做|读)/.test(context)) return false;
+  if (id.startsWith('target_') && /不想|不考虑|不打算|排除|不做|拒绝/.test(context)) return false;
+  return true;
+}
+
 function hasFieldMeaning(id, value, quote) {
   if (/^(?:未知|不清楚|不知道|待确认|尚未核实)$/.test(value)) return false;
   if (id === 'current_job_function' || id === 'target_job_function') {
@@ -197,6 +205,7 @@ function safeCode(value, allowed, fallback) {
 function extractedPrefills(question, raw, candidates) {
   const allowed = new Set(candidates.map((item) => item.id));
   const values = new Map();
+  const conflicts = new Set();
   const extracted = Array.isArray(raw.extracted) ? raw.extracted : [];
   for (const item of extracted) {
     const id = typeof item?.conditionId === 'string' ? item.conditionId : '';
@@ -213,14 +222,22 @@ function extractedPrefills(question, raw, candidates) {
     )
       continue;
     if ((typedPrefillIds.has(id) || id.startsWith('current_')) && !personalQuote(question, quote)) continue;
+    if (!currentOrTargetMeaning(question, quote, id)) continue;
     if (!hasFieldMeaning(id, value, quote)) continue;
+    if (conflicts.has(id)) continue;
+    if (values.has(id) && values.get(id).initialValue !== value) {
+      values.delete(id);
+      conflicts.add(id);
+      continue;
+    }
     values.set(id, { initialValue: value, initialQuote: quote });
   }
-  return values;
+  return { values, conflicts };
 }
 
 function prefill(question, id) {
   const candidates = question.split(/[，。；！？\n]/).filter(personalClause)
+    .filter((clause) => currentOrTargetMeaning(question, clause, id))
     .map((clause) => prefillClause(clause, id)).filter((item) => item.initialValue);
   const values = new Set(candidates.map((item) => item.initialValue));
   return values.size === 1 ? candidates[0] : {};
@@ -310,18 +327,19 @@ export function normalizeIntake(question, raw = {}) {
   const candidates = candidateConditions({ scope, path, sector });
   const byId = new Map(candidates.map((item) => [item.id, item]));
   const requested = Array.isArray(raw.fieldIds) ? raw.fieldIds : [];
-  const extracted = extractedPrefills(question, raw, candidates);
+  const { values: extracted, conflicts } = extractedPrefills(question, raw, candidates);
   const fallback = priorities[path] || priorities[scope] || [];
   const anchors = comparisonAnchors[path] || comparisonAnchors[scope] || [];
   const prefilled = candidates
     .filter((item) => Object.keys(prefill(question, item.id)).length > 0)
     .map((item) => item.id);
-  const explicitIds = new Set([...prefilled, ...extracted.keys()]);
+  const explicitIds = new Set([...prefilled, ...extracted.keys(), ...conflicts]);
   const selected = [];
   let unansweredCount = 0;
   for (const id of [
     ...prefilled,
     ...extracted.keys(),
+    ...conflicts,
     ...anchors,
     ...requested,
     ...fallback,
@@ -338,6 +356,7 @@ export function normalizeIntake(question, raw = {}) {
       group: item.group,
       ...extracted.get(item.id),
       ...prefill(question, item.id),
+      ...(conflicts.has(item.id) ? { initialValue: undefined, initialQuote: undefined } : {}),
     };
     const hasInitialValue = Boolean(field.initialValue);
     if (!hasInitialValue && !explicitIds.has(id) && unansweredCount >= 6)
