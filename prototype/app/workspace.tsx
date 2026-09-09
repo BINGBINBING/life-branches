@@ -112,8 +112,8 @@ function Evidence({ value }: { value: Fact | null }) {
   if (!value) return <p className="unknown">来源未说明</p>;
   return (
     <>
-      <p>{value.text}</p>
-      <p className="meta">{value.verification === 'model-reviewed' ? 'AI 总结，已通过模型证据复核，仍需人工判断' : '原文片段，总结尚未通过复核'}</p>
+      <p>{value.verification === 'model-reviewed' && value.semanticReviewVersion === 'ds-content-1' ? value.text : '暂未形成可靠归纳'}</p>
+      <p className="meta">{value.verification === 'model-reviewed' && value.semanticReviewVersion === 'ds-content-1' ? 'AI 总结，已通过模型证据复核，仍需人工判断' : '原始材料仅供核对，不作为本栏结论。旧记录需重新发起研究才能生成新归纳。'}</p>
       <details className="quote-details">
         <summary>
           查看依据 <ChevronDown size={13} />
@@ -191,17 +191,12 @@ function ExperienceCard({
           {item.stage ? (
             <>
               <strong>{item.stage.label}</strong>
-              <blockquote>{item.stage.quote}</blockquote>
+              <details className="quote-details"><summary>阶段依据 <ChevronDown size={13} /></summary><blockquote>{item.stage.quote}</blockquote></details>
               <p className="meta">
                 {item.stage.scopeNote ||
                   '仅说明这一阶段，不代表整个选择成功或失败。'}
               </p>
-              {item.outcome && item.outcome.quote !== item.stage.quote && (
-                <details className="quote-details">
-                  <summary>其他结果片段 <ChevronDown size={13} /></summary>
-                  <blockquote>{item.outcome.quote}</blockquote>
-                </details>
-              )}
+              <Evidence value={item.outcome} />
             </>
           ) : (
             <Evidence value={item.outcome} />
@@ -2201,9 +2196,9 @@ export default function Workspace() {
                               ? '可参考的做法'
                               : '与你相关的风险'}
                           </h3>
-                          {insights.filter((i) => i.type === type).length ? (
+                          {insights.filter((i) => i.type === type && i.semanticReviewVersion === 'ds-content-1').length ? (
                             insights
-                              .filter((i) => i.type === type)
+                              .filter((i) => i.type === type && i.semanticReviewVersion === 'ds-content-1')
                               .map((i, index) => (
                                 <div className="insight" key={index}>
                                   <h4>{i.title}</h4>
@@ -2212,8 +2207,8 @@ export default function Workspace() {
                                   <p className="insight-applicability">
                                     <strong>
                                       {i.type === 'practice'
-                                        ? '为什么值得参考：'
-                                        : '为什么与你相关：'}
+                                        ? '参考条件与限制：'
+                                        : '相关性与限制：'}
                                     </strong>
                                     {i.applicability}
                                   </p>
@@ -2233,7 +2228,7 @@ export default function Workspace() {
                               ))
                           ) : (
                             <p className="muted empty-insight">
-                              现有证据不足，暂不作判断。
+                              {type === 'practice' ? '当前证据不足以提炼具体做法。' : '暂未形成可靠风险归纳。'}
                             </p>
                           )}
                         </section>

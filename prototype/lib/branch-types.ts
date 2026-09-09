@@ -78,7 +78,7 @@ export type OfficialCheck = {
   policyYears?: string[];
   applicableYear?: string;
 };
-export type Fact = { text: string; quote: string; summary?: string; verification?: string };
+export type Fact = { text: string; quote: string; summary?: string; verification?: string; semanticReviewVersion?: string };
 export type ConditionComparison = {
   conditionId: string;
   label: string;
@@ -130,6 +130,7 @@ export type Path = {
 };
 export type Insight = {
   verification?: string;
+  semanticReviewVersion?: string;
   type: 'practice' | 'risk';
   title: string;
   text: string;

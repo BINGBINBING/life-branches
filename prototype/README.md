@@ -145,3 +145,22 @@ Analysis selects up to four contiguous windows of at most 600 characters per
 source from already returned text, retaining the opening and preferring action
 and outcome paragraphs. Windows are ordered, not concatenated into a quote.
 This does not fetch full articles or guarantee complete context.
+
+### DS Content Generation
+
+New analyses use DeepSeek for both candidate summaries and independent content
+classification/evidence review. Actual actions are no longer admitted by a local
+action-keyword requirement in final analysis. The reviewer must explicitly return
+the expected content type as well as support: goals, feelings and general advice
+cannot qualify as actual actions or practices. Citation, numeric support, stage,
+direction and structured-condition safeguards remain in place. The conservative
+search checkpoint is unchanged and does not publish content as reviewed.
+
+Only summaries marked `model-reviewed` and `ds-content-1` appear as conclusions.
+Unapproved facts retain their original quotation in collapsed evidence; they do
+not fall back to displaying that quote as a summary. Unreviewed practices/risks
+are omitted from conclusion panels, including during local rematching. Legacy
+records without this review marker are not upgraded automatically: start a new
+research run to generate the new summaries. This avoids silently charging for
+opening history. Local rematching remains zero external calls. The rule version
+is `evidence-4-ds-content`; model review is not verification of real-world truth.

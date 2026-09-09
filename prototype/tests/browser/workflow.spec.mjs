@@ -43,7 +43,7 @@ for (const width of [1440, 360]) {
     const result = await analyze([source, second], profile, () => {}, { ask: async (prompt) => {
       if (++calls === 1) return { value: candidates };
       const items = JSON.parse(prompt.slice(prompt.indexOf('\n') + 1));
-      return { value: { reviews: items.map((item) => ({ id: item.id, supported: true })) } };
+      return { value: { reviews: items.map((item) => ({ id: item.id, supported: true, contentType: item.field === 'action' ? 'actual_action' : item.field })) } };
     } });
     expect(result.paths.length).toBe(2);
     await page.route('**/api/branches/**', async (route) => {
@@ -127,6 +127,9 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
     const contentLefts = await page.locator('.experience-facts > div').nth(1).locator(':scope > :not(h4)').evaluateAll((items) => items.map((item) => Math.round(item.getBoundingClientRect().left)));
     expect(new Set(contentLefts).size).toBe(1);
     await page.screenshot({ path: info.outputPath('results.png'), fullPage: true });
+    await expect(page.locator('.experience-facts').getByText('暂未形成可靠归纳').first()).toBeVisible();
+    await expect(page.locator('.insight-grid .insight')).toHaveCount(0);
+    await expect(page.locator('.experience-facts').getByText(source.snippets[0], { exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: /补充 \d+ 项条件/ }).click();
     await expect(dialog.getByRole('textbox').first()).toHaveValue('测试大学');
     expect(requests.filter((item) => item.path.endsWith('/explore')).length).toBe(1);

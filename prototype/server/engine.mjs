@@ -603,7 +603,7 @@ function fact(source, item) {
     : null;
 }
 
-export function validateAnalysis(raw, sources, profile) {
+export function validateAnalysis(raw, sources, profile, options = {}) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw))
     throw new Error('分析内容格式不正确，已有来源仍可查看。');
   const byId = new Map(sources.map((s) => [s.id, s]));
@@ -658,7 +658,7 @@ export function validateAnalysis(raw, sources, profile) {
         rejectionReasons.missingActionCitation++;
         continue;
       }
-      if (!hasObservableAction(action.quote)) {
+      if (!options.modelClassification && !hasObservableAction(action.quote)) {
         rejected++;
         rejectionReasons.unverifiedAction++;
         sourceReasons.set(source.id, '未识别到可观察行动，仅有态度、意向或行动语义待核实');
@@ -683,7 +683,7 @@ export function validateAnalysis(raw, sources, profile) {
           evidence,
         );
       const classification = classifyContent(action.quote, source.snippets);
-      if (classification.kind === 'advice') {
+      if (!options.modelClassification && classification.kind === 'advice') {
         rejected++;
         sourceReasons.set(source.id, classification.reason);
         continue;
@@ -857,7 +857,7 @@ export function rematchAnalysis(previous, sources, profile) {
           : prior && !prior.accepted ? prior.reason : '未入选本轮详细分析，仍可查看原始来源',
       };
     }),
-    insights: buildDecisionInsights(paths, previous.insights || []).map((insight) =>
+    insights: buildDecisionInsights(paths, previous.insights || [], true).map((insight) =>
       readiness.researchMode === 'general' ? { ...insight, applicability: '必需条件尚未补齐，仅作通用经验参考，不判断个人适用性。' } : insight),
     questions: researchQuestions(questions, profile),
     analyzedAt: Date.now(),
@@ -913,18 +913,19 @@ questions只问来源里明确存在、用户尚未说明、能影响适用性�
 给定来源：${JSON.stringify(supplied)}`;
   const raw = options.preloadedRaw || await (options.ask || ask)(
     prompt +
+      '\n归纳要求：background.text、action.text、outcome.text用一至两句概括，不能直接复制quote。先区分实际行为、目标、计划、感受和建议，只有已实施的具体行为进入action；明确职业方向或描述技能不是具体做法。insights的practice只能归纳已实施做法，risk只归纳有原文支持的风险。各text只表达所绑定quote支持的内容；信息不足返回null，不为填满栏目编造步骤。用户关系由已确认条件对照另行展示，不混入来源事实。' +
       '\n职业方向约束：以用户目标岗位作为转换终点，不能把“开发转运营”用于“运营转开发”的案例对照。原岗位不同可说明背景差异，但转换终点必须相关；方向无法确认时不要当作同方向案例。多故事来源只引用所选故事，不混用不同人物或方向。每个excerpts元素是独立连续片段，元素之间可能不相邻，不得假设属于同一个人物或连续时间线。' +
       '\n推广处理覆盖规则：不要仅凭认证、机构身份或疑似推广剔除来源；保留有行动引文的相关来源，内容性质交由后续审核。不要输出未经证实的作者属性。' +
       '\n额外约束：完成项目或部署不等于成功就业；电子信息专业不等于有编程基础。result 的 success 必须由目标阶段的明确成果支持。路径名称不允许加入未经原文确认的在职/脱产状态。missing 不得询问是否愿意伪造经验等不诚信行为。',
   );
   await options.onRaw?.(raw);
   progress('正在逐条检查引用是否存在于原始片段…');
-  const result = validateAnalysis(raw.value, sources, profile);
+  const result = validateAnalysis(raw.value, sources, profile, { modelClassification: !options.deferSummaryReview });
   if (!options.deferSummaryReview) progress('正在复核总结是否忠于原文…');
   const summaryReview = options.deferSummaryReview
     ? { calls: 0, status: 'deferred' }
     : await reviewSummaries(result, raw.value, sources, options.ask || ask);
-  result.insights = buildDecisionInsights(result.paths, result.insights).map((insight) =>
+  result.insights = buildDecisionInsights(result.paths, result.insights, true).map((insight) =>
     profile.researchMode === 'general' ? { ...insight, applicability: '必需条件尚未补齐，仅作通用经验参考，不判断个人适用性。' } : insight);
   const usage = { ...raw.metadata?.usage };
   for (const [key, value] of Object.entries(summaryReview.metadata?.usage || {}))

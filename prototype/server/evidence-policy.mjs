@@ -1,4 +1,4 @@
-export const RULE_VERSION = 'evidence-3';
+export const RULE_VERSION = 'evidence-4-ds-content';
 export const CALL_BUDGET = Object.freeze({
   intake: 1,
   analysis: 3,

@@ -103,7 +103,7 @@ test('archive API opens a readable exploration without remote calls', async () =
   assert.equal(response.value.historical, true);
   assert.equal(response.value.status, 'done');
   assert.ok(response.value.result.paths.length > 0);
-  assert.equal(response.value.result.ruleVersion, 'evidence-3');
+  assert.equal(response.value.result.ruleVersion, 'evidence-4-ds-content');
   assert.ok(
     response.value.result.paths.every((p) =>
       p.cases.every((c) => c.result === 'unknown'),

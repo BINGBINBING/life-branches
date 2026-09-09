@@ -28,7 +28,7 @@ function applicability(type, item) {
     : `案例的${comparison.label}为${comparison.caseValue}；你尚未提供同口径信息，因此还不能判断这项风险是否与你相关。`;
 }
 
-export function buildDecisionInsights(paths, validatedInsights) {
+export function buildDecisionInsights(paths, validatedInsights, reviewedOnly = false) {
   const cases = paths.flatMap((path) => path.cases || []);
   const bySource = new Map(cases.map((item) => [item.sourceId, item]));
   const result = [];
@@ -38,12 +38,14 @@ export function buildDecisionInsights(paths, validatedInsights) {
     const item = bySource.get(insight.sourceId);
     const key = `${insight.type}:${insight.sourceId}:${insight.quote}`;
     if (!item || seen.has(key)) return;
+    const reusableAction = insight.type === 'practice' && item.action.verification === 'model-reviewed' && item.action.semanticReviewVersion === 'ds-content-1' && insight.quote === item.action.quote;
+    if (reviewedOnly && !reusableAction && !(insight.verification === 'model-reviewed' && insight.semanticReviewVersion === 'ds-content-1')) return;
     if (result.filter((entry) => entry.type === insight.type).length >= 2)
       return;
     result.push({
       ...insight,
       ...(insight.type === 'practice' && item.action.verification === 'model-reviewed' && insight.quote === item.action.quote
-        ? { text: item.action.summary, verification: 'model-reviewed', title: '行动归纳' } : {}),
+        ? { text: item.action.summary, verification: 'model-reviewed', semanticReviewVersion: item.action.semanticReviewVersion, title: '行动归纳' } : {}),
       applicability: applicability(insight.type, item),
     });
     seen.add(key);
@@ -56,6 +58,7 @@ export function buildDecisionInsights(paths, validatedInsights) {
       title: '来源中的可参考做法',
       text: item.action.verification === 'model-reviewed' ? item.action.summary : item.action.quote,
       verification: item.action.verification,
+      semanticReviewVersion: item.action.semanticReviewVersion,
       sourceId: item.sourceId,
       quote: item.action.quote,
     });
@@ -69,5 +72,5 @@ export function buildDecisionInsights(paths, validatedInsights) {
       });
     }
   }
-  return result;
+  return reviewedOnly ? result.filter((item) => item.verification === 'model-reviewed' && item.semanticReviewVersion === 'ds-content-1') : result;
 }

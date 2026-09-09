@@ -177,5 +177,5 @@ test('A09/A10 reuses sources and rematches locally without changing accepted cas
   assert.equal(eight.analysis.calls, 0);
   assert.equal(eight.paths[0].cases.length, two.paths[0].cases.length);
   assert.equal(eight.analysis.budget.retries, 0);
-  assert.equal(eight.ruleVersion, 'evidence-3');
+  assert.equal(eight.ruleVersion, 'evidence-4-ds-content');
 });

@@ -1,6 +1,38 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { reviewSummaries, summaryHasSupport } from './summary-review.mjs';
+import { analyze, validProfile } from './engine.mjs';
+
+test('screenshot goals and skill advice cannot become approved actions or practices', async () => {
+  for (const [quote, summary, category] of [
+    ['就这样，明确了职业方向：结构设计主管。', '确定结构设计主管为职业目标', 'goal'],
+    ['你懂得功能流线、工艺参数、空间需求。', '具备功能流线和工艺参数知识', 'advice'],
+  ]) {
+    const fact = { text: quote, quote };
+    const result = { paths: [{ cases: [{ sourceId: 'S1', action: fact }] }], insights: [] };
+    await reviewSummaries(result, { paths: [{ cases: [{ sourceId: 'S1', action: { text: summary, quote } }] }] }, [],
+      async () => ({ value: { reviews: [{ id: 'S1:action', supported: true, contentType: category }] } }));
+    assert.equal(fact.text, '');
+    assert.equal(fact.quote, quote);
+    assert.equal(fact.verification, undefined);
+  }
+});
+
+test('DS-classified actions no longer require a local action keyword', async () => {
+  const quote = '我把每次操作录成视频交给同事逐项挑错';
+  const summary = '记录操作过程并请同事逐项纠错';
+  let calls = 0;
+  const result = await analyze([{ id: 'S1', title: '虚构经历', snippets: [quote] }],
+    validProfile({ question: '转行开发' }), () => {}, { ask: async () => {
+      calls++;
+      return { value: calls === 1 ? { paths: [{ cases: [{ sourceId: 'S1', action: { text: summary, quote } }] }] }
+        : { reviews: [{ id: 'S1:action', supported: true, contentType: 'actual_action' }] } };
+    } });
+  assert.equal(calls, 2);
+  assert.equal(result.paths[0].cases[0].action.text, summary);
+  assert.equal(result.insights[0].text, summary);
+  assert.equal(result.insights[0].semanticReviewVersion, 'ds-content-1');
+});
 
 function fixture() {
   const quote = '我下班以后每天练习2小时，做了一个项目';
@@ -16,7 +48,7 @@ test('reviewed summaries stay separate from immutable original quotes', async ()
   let calls = 0;
   const review = await reviewSummaries(result, raw, [], async () => {
     calls++;
-    return { value: { reviews: [{ id: 'S1:action', supported: true }] } };
+    return { value: { reviews: [{ id: 'S1:action', supported: true, contentType: 'actual_action' }] } };
   });
   assert.equal(calls, 1);
   assert.equal(review.calls, 1);
@@ -34,7 +66,8 @@ test('failed, malformed, ambiguous and negative reviews retain the original exce
     const { result, raw } = fixture();
     await reviewSummaries(result, raw, [], ask);
     const fact = result.paths[0].cases[0].action;
-    assert.equal(fact.text, fact.quote);
+    assert.equal(fact.text, '');
+    assert.ok(fact.quote);
   }
   assert.equal(summaryHasSupport('每天8小时', '每天2小时'), false);
   assert.equal(summaryHasSupport('练习因此保证就业', '每天练习'), false);
@@ -43,7 +76,7 @@ test('failed, malformed, ambiguous and negative reviews retain the original exce
 test('practice and risk summaries share the same bounded review call', async () => {
   const insight = { sourceId: 'S1', type: 'risk', quote: '准备期间中断收入，积蓄很快用完', text: '准备期间中断收入，积蓄很快用完' };
   const result = { paths: [], insights: [insight] };
-  const review = await reviewSummaries(result, { insights: [{ ...insight, text: '准备过程存在收入中断和积蓄消耗风险' }] }, [], async () => ({ value: { reviews: [{ id: 'insight:0', supported: true }] } }));
+  const review = await reviewSummaries(result, { insights: [{ ...insight, text: '准备过程存在收入中断和积蓄消耗风险' }] }, [], async () => ({ value: { reviews: [{ id: 'insight:0', supported: true, contentType: 'risk' }] } }));
   assert.equal(review.calls, 1);
   assert.equal(insight.text, '准备过程存在收入中断和积蓄消耗风险');
   assert.equal(insight.title, '风险归纳');
@@ -83,7 +116,7 @@ test('malformed collections are skipped without losing valid summary candidates'
     raw.paths.unshift(invalid, { cases: invalid });
     raw.paths.at(-1).cases.unshift(invalid);
     raw.insights = invalid;
-    const review = await reviewSummaries(result, raw, [], async () => ({ value: { reviews: [null, { id: 'S1:action', supported: true }] } }));
+    const review = await reviewSummaries(result, raw, [], async () => ({ value: { reviews: [null, { id: 'S1:action', supported: true, contentType: 'actual_action' }] } }));
     assert.equal(review.status, 'reviewed');
     assert.equal(result.paths[0].cases[0].action.verification, 'model-reviewed');
     const empty = await reviewSummaries(fixture().result, { paths: invalid, insights: invalid }, [], async () => { throw new Error('must not call'); });

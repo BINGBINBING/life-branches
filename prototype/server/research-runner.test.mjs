@@ -17,7 +17,7 @@ for (const [incomplete, newSources] of [[false, false], [true, true], [true, fal
     analyze: (items, user, progress, options) => analyze(items, user, progress, { ...options, ask: async (prompt) => {
       calls++;
       const metadata = { provider: 'test', usage: { total_tokens: 10 } };
-      if (prompt.startsWith('你是独立证据审核员')) return { metadata, value: { reviews: sources.map((source) => ({ id: `${source.id}:action`, supported: true })) } };
+      if (prompt.startsWith('你是独立内容分类与证据审核员')) return { metadata, value: { reviews: sources.map((source) => ({ id: `${source.id}:action`, supported: true, contentType: 'actual_action' })) } };
       rawCalls++;
       const selected = incomplete && rawCalls === 1 ? sources.slice(0, 3) : sources;
       return { metadata, value: { paths: [{ cases: selected.map((source, i) => ({ sourceId: source.id, action: { text: i < 2 ? '补修先修课程' : '参加笔试', quote: source.snippets[0].split('，')[0] }, conditionEvidence: [{ conditionId: 'daily_time', quote: '我每天学习2小时' }] })) }] } };
