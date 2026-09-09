@@ -124,3 +124,11 @@ test('one academic decision route can contain multiple evidence-based action bra
   assert.ok(paths.every((p) => p.decisionRoute === 'campus_transfer'));
   assert.equal(paths.flatMap((p) => p.cases).length, 3);
 });
+
+test('academic action catalogue covers eligibility, adaptation and fallback without intent-only grouping', () => {
+  const quotes = ['我查阅了转专业资格政策', '我转入后调整了选课安排', '我改为辅修中文', '我计划准备转专业面试', '我没有准备面试'];
+  const paths = groupCasesByPath(quotes.map((quote, i) => ({ sourceId: `S${i}`, action: { quote } })),
+    { decisionScope: 'major_transition', decisionPath: 'campus_transfer' }, new Map());
+  assert.deepEqual(paths.map((p) => p.id), ['eligibility_preparation', 'post_transfer_adaptation', 'alternative_plan', 'action_unknown']);
+  assert.equal(paths.at(-1).cases.length, 2);
+});

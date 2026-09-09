@@ -42,10 +42,19 @@ const careerPaths = [
 ];
 
 const majorActions = [
+  { id: 'eligibility_preparation', label: '成绩与资格核对', pattern: /(?:核对|查阅|咨询|提高|重修).{0,12}(?:资格|政策|绩点|成绩|排名)/ },
   { id: 'prerequisite_study', label: '先修补齐', pattern: /(?:修读|补修|自学|旁听|学完|完成).{0,12}(?:课程|先修|基础|学分)/ },
   { id: 'assessment_preparation', label: '考核准备', pattern: /(?:准备|练习|参加|复习).{0,12}(?:面试|笔试|考核|考试)/ },
   { id: 'application_materials', label: '申请材料准备', pattern: /(?:整理|提交|撰写|准备).{0,12}(?:材料|申请书|个人陈述|作品集)/ },
+  { id: 'post_transfer_adaptation', label: '转入后适应', pattern: /(?:转入后|转专业后).{0,16}(?:补课|调整|适应|跟上|选课)/ },
+  { id: 'alternative_plan', label: '调整替代方案', pattern: /(?:改为|改选|转而|重新选择).{0,12}(?:辅修|考研|原专业|第二学士|二学位)/ },
 ];
+
+function matchingActions(catalogue, quote) {
+  const sentences = String(quote || '').split(/[。！？；\n]/).filter((sentence) =>
+    !/尚未|没有|没能|未曾|不打算|计划|打算|建议|应该|可以考虑/.test(sentence));
+  return catalogue.filter((candidate) => sentences.some((sentence) => candidate.pattern.test(sentence)));
+}
 
 function sourceText(source, action = '') {
   return [source?.title, ...(source?.snippets || []), action]
@@ -119,7 +128,7 @@ export function groupCasesByPath(cases, profile, sources) {
   for (const item of cases) {
     let path;
     if (profile.decisionScope === 'major_transition') {
-      path = majorActions.find((candidate) => candidate.pattern.test(item.action?.quote || '')) || {
+      path = matchingActions(majorActions, item.action?.quote)[0] || {
         id: 'action_unknown', label: '行动方式待确认',
       };
     } else {
