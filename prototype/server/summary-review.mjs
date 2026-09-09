@@ -20,9 +20,14 @@ export function summaryHasSupport(summary, quote) {
 
 export async function reviewSummaries(result, raw, sources, ask) {
   const candidates = [];
+  const rawCases = (Array.isArray(raw?.paths) ? raw.paths : [])
+    .flatMap((path) => Array.isArray(path?.cases) ? path.cases : [])
+    .filter((item) => item && typeof item === 'object');
+  const rawInsights = (Array.isArray(raw?.insights) ? raw.insights : [])
+    .filter((item) => item && typeof item === 'object');
   for (const path of result.paths) {
     for (const item of path.cases) {
-      const original = (raw.paths || []).flatMap((p) => p.cases || []).find((entry) => entry.sourceId === item.sourceId);
+      const original = rawCases.find((entry) => entry.sourceId === item.sourceId);
       for (const field of ['background', 'action', 'outcome']) {
         const fact = item[field];
         const summary = typeof original?.[field]?.text === 'string' ? original[field].text.trim() : '';
@@ -33,7 +38,7 @@ export async function reviewSummaries(result, raw, sources, ask) {
     }
   }
   for (const [index, insight] of (result.insights || []).entries()) {
-    const original = (raw.insights || []).find((item) => item.sourceId === insight.sourceId && item.type === insight.type && item.quote === insight.quote);
+    const original = rawInsights.find((item) => item.sourceId === insight.sourceId && item.type === insight.type && item.quote === insight.quote);
     const summary = typeof original?.text === 'string' ? original.text.trim() : '';
     if (!summary || summary === insight.quote || !summaryHasSupport(summary, insight.quote)) continue;
     candidates.push({ id: `insight:${index}`, field: insight.type, summary, quote: insight.quote,
@@ -45,7 +50,7 @@ export async function reviewSummaries(result, raw, sources, ask) {
     const reviews = response?.value?.reviews;
     if (!Array.isArray(reviews)) return { calls: 1, status: 'invalid_review', metadata: response.metadata };
     for (const candidate of candidates) {
-      const matching = reviews.filter((review) => review.id === candidate.id);
+      const matching = reviews.filter((review) => review?.id === candidate.id);
       if (matching.length !== 1 || matching[0].supported !== true) continue;
       candidate.fact.text = candidate.summary;
       candidate.fact.summary = candidate.summary;

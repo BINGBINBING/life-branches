@@ -22,6 +22,13 @@ test('a title alone cannot validate an action citation', () => {
   assert.deepEqual(result.sourceDispositions, [{ sourceId: 'S1', accepted: false, reason: '行动引文未通过片段校验' }]);
 });
 
+test('null model entries do not discard valid cases', () => {
+  const source = { id: 'S1', title: '经历', snippets: ['我完成了学习项目'] };
+  const result = validateAnalysis({ paths: [null, { cases: [null, { sourceId: 'S1', action: { text: source.snippets[0], quote: source.snippets[0] } }] }], insights: [null] }, [source], profile);
+  assert.equal(result.paths[0].cases.length, 1);
+  assert.equal(result.rejectionReasons.invalidInsightCitation, 1);
+});
+
 test('unselected sources keep an explicit unknown reason rather than invented rejection', () => {
   const result = validateAnalysis({ paths: [] }, [{ id: 'S1', title: '经历', snippets: ['我做了项目'] }], profile);
   assert.equal(result.sourceDispositions[0].accepted, false);

@@ -65,3 +65,17 @@ test('unsupported hard facts cannot reach the reviewer even when it would approv
   assert.equal(calls, 0);
   assert.equal(review.status, 'no_candidates');
 });
+
+test('malformed collections are skipped without losing valid summary candidates', async () => {
+  for (const invalid of [null, 'wrong', 42, {}]) {
+    const { result, raw } = fixture();
+    raw.paths.unshift(invalid, { cases: invalid });
+    raw.paths.at(-1).cases.unshift(invalid);
+    raw.insights = invalid;
+    const review = await reviewSummaries(result, raw, [], async () => ({ value: { reviews: [null, { id: 'S1:action', supported: true }] } }));
+    assert.equal(review.status, 'reviewed');
+    assert.equal(result.paths[0].cases[0].action.verification, 'model-reviewed');
+    const empty = await reviewSummaries(fixture().result, { paths: invalid, insights: invalid }, [], async () => { throw new Error('must not call'); });
+    assert.equal(empty.calls, 0);
+  }
+});

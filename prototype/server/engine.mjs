@@ -645,12 +645,14 @@ export function validateAnalysis(raw, sources, profile) {
     0,
     5,
   )) {
+    if (!candidate || typeof candidate !== 'object') continue;
     if (acceptedCases.length >= DETAILED_CASE_LIMIT) break;
     const cases = [];
     for (const item of (Array.isArray(candidate.cases)
       ? candidate.cases
       : []
     ).slice(0, 10)) {
+      if (!item || typeof item !== 'object') continue;
       if (acceptedCases.length + cases.length >= DETAILED_CASE_LIMIT) break;
       const source = byId.get(item.sourceId);
       if (!source || seen.has(source.id)) continue;
@@ -733,7 +735,7 @@ export function validateAnalysis(raw, sources, profile) {
     9,
   )) {
     citationAttempts++;
-    const source = byId.get(item.sourceId);
+    const source = byId.get(item?.sourceId);
     const quote = source && evidence(source, item.quote);
     if (
       !quote ||
