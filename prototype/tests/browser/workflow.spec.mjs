@@ -88,7 +88,9 @@ for (const width of [1440, 360]) {
     await expect(card).toHaveCount(1);
     await expect(card.getByRole('heading', { name: second.title })).toBeVisible();
     await expect(card.getByText('整理并提交申请材料', { exact: true })).toBeVisible();
-    await expect(page.locator('.insight-grid').getByText('整理并提交申请材料', { exact: true })).toBeVisible();
+    await expect(page.locator('.insight-grid')).toHaveCount(0);
+    await expect(page.locator('.path-evidence')).toBeVisible();
+    await expect(page.locator('.path-evidence')).toContainText('暂未形成通过复核的分类依据');
     await expect(card.getByText('AI 总结，已通过模型证据复核，仍需人工判断')).toBeVisible();
     const evidence = card.locator('.experience-facts > div').nth(1);
     await expect(evidence.locator('blockquote')).not.toBeVisible();
