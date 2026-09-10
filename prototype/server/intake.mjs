@@ -30,7 +30,7 @@ function personalClause(text) {
 
 function personalQuote(question, quote) {
   const contexts = question.split(/[，。；！？\n]/).filter((clause) => clause.includes(quote));
-  return contexts.length ? contexts.every(personalClause) : personalClause(question);
+  return contexts.length ? contexts.every(personalClause) : quote.split(/[，。；！？\n]/).every(personalClause);
 }
 
 function currentOrTargetMeaning(question, quote, id) {
@@ -221,7 +221,7 @@ function extractedPrefills(question, raw, candidates) {
       !quote ||
       quote.length > 240 ||
       !question.includes(quote) ||
-      !quote.toLowerCase().includes(value.toLowerCase())
+      (!quote.toLowerCase().includes(value.toLowerCase()) && !typedPrefillIds.has(id))
     )
       continue;
     if ((typedPrefillIds.has(id) || id.startsWith('current_')) && !personalQuote(question, quote)) continue;
@@ -239,6 +239,12 @@ function extractedPrefills(question, raw, candidates) {
 }
 
 function prefill(question, id) {
+  if (id === 'graduation_delay') {
+    // Keep conditional cost attached to campus transfer, never borrow the minor cost.
+    const match = question.match(/如果(?:直接)?转专业[，,]?[^。；]{0,35}?(?:延后毕业|延毕)(?:约)?\s*(\d+)\s*个月/);
+    if (match && !/朋友|同学|别人|假设|比如|例如/.test(question.slice(Math.max(0, match.index - 20), match.index)))
+      return { initialValue: `${match[1]}个月`, initialQuote: match[0] };
+  }
   const candidates = question.split(/[，。；！？\n]/).filter(personalClause)
     .filter((clause) => currentOrTargetMeaning(question, clause, id))
     .map((clause) => prefillClause(clause, id)).filter((item) => item.initialValue);
@@ -247,6 +253,22 @@ function prefill(question, id) {
 }
 
 function prefillClause(question, id) {
+  if (id === 'institution_name' || id === 'current_major') {
+    const match = question.match(/我(?:目前|现在)?(?:就读于|在读于|就读)([^，。；]{2,30}?(?:大学|学院))([^，。；]{1,20}?)专业/);
+    if (match) return { initialValue: match[id === 'institution_name' ? 1 : 2], initialQuote: match[0] };
+  }
+  if (id === 'prerequisite_courses') {
+    const match = question.match(/我(?:目前|现在)?(?:已经|已)?修完([^，。；]+)/);
+    if (match) return { initialValue: match[1], initialQuote: match[0] };
+  }
+  if (id === 'policy_year') {
+    const match = question.match(/适用(?:年份|学年)(?:为|是)?\s*(20\d{2}(?:\s*[—–-]\s*20\d{2})?)\s*学年/);
+    if (match) return { initialValue: match[1], initialQuote: match[0] };
+  }
+  if (id === 'target_major') {
+    const match = question.match(/目标专业(?:是|为)([^，。；]{1,20})/);
+    if (match) return { initialValue: match[1], initialQuote: match[0] };
+  }
   if (id === 'gpa_value') {
     const match = question.match(/(?:绩点|GPA)\s*(\d+(?:\.\d+)?)/i);
     if (match && parseSourceCondition(id, question))
@@ -363,6 +385,7 @@ export function normalizeIntake(question, raw = {}) {
       ...(conflicts.has(item.id) ? { initialValue: undefined, initialQuote: undefined } : {}),
     };
     const hasInitialValue = Boolean(field.initialValue);
+    if (item.id === 'policy_year' && /[—–-]/.test(field.initialValue || '')) field.answerType = 'text';
     if (!hasInitialValue && !explicitIds.has(id) && unansweredCount >= 6)
       continue;
     selected.push(field);
@@ -380,7 +403,7 @@ export function normalizeIntake(question, raw = {}) {
   };
 }
 
-export function createLocalIntakePlan(question, decisionPath) {
+export function createLocalIntakePlan(question, decisionPath, previous = {}) {
   if (
     typeof question !== 'string' ||
     question.trim().length < 2 ||
@@ -398,6 +421,8 @@ export function createLocalIntakePlan(question, decisionPath) {
       scope,
       path: decisionPath,
       sector: inferredSector(question),
+      fieldIds: Array.isArray(previous.fieldIds) ? previous.fieldIds : [],
+      extracted: Array.isArray(previous.extracted) ? previous.extracted : [],
     }),
     generatedBy: 'local-route-change',
   };
@@ -423,7 +448,7 @@ export async function createIntakePlan(question, options = {}) {
 \u6761\u4ef6\u76ee\u5f55\uff1a${JSON.stringify(catalogue())}`;
   const ask = options.ask || ((value) => deepseekJSON(value));
   try {
-    const result = await ask(prompt);
+    const result = await ask(prompt + '\n补充约束：fieldIds 的4–6项限制只用于尚未提供的补问，不限制 extracted 数量。遍历全部原话，将所有明确条件提取到 extracted，特别检查学校、当前专业、目标专业、已修课程、尚未修课程、绩点和分制、毕业成本、政策适用学年。每个值尽量直接摘取原文，保留年份范围，不把2026—2027缩成2026。学校门槛不是用户成绩，要求课程不是已修课程，文档名称不是URL。多路径条件不得混用，只填写当前path适用的值；缺少链接仍需补充链接，不编造地址。');
     const raw = result?.value || result;
     return {
       ...normalizeIntake(question.trim(), raw),

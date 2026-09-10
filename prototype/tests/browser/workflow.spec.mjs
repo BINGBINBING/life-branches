@@ -46,9 +46,11 @@ for (const width of [1440, 360]) {
       return { value: { reviews: items.map((item) => ({ id: item.id, supported: true, contentType: item.field === 'action' ? 'actual_action' : item.field })) } };
     } });
     expect(result.paths.length).toBe(2);
+    let captured;
     await page.route('**/api/branches/**', async (route) => {
       const path = new URL(route.request().url()).pathname;
-      await route.fulfill({ json: path.endsWith('/health') ? { archive: false, developerTools: false }
+      if (path.endsWith('/diagnostic-snapshot')) captured = route.request().postDataJSON();
+      await route.fulfill({ json: path.endsWith('/health') ? { archive: false, developerTools: true }
         : path.endsWith('/researches') ? { records: [] }
         : path.endsWith('/intake') ? normalizeIntake(question)
         : path.endsWith('/explore') ? { id: job.id }
@@ -62,12 +64,26 @@ for (const width of [1440, 360]) {
     await page.getByRole('button', { name: '确认并搜索知乎' }).click();
     const dialog = page.getByRole('dialog', { name: '补充本次研究的条件' });
     await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: '保存诊断快照', exact: true }).click();
+    await expect(page.locator('.diagnostic-capture output')).toContainText('诊断快照已保存到本地');
+    expect(captured.researchId).toBe(job.id);
+    expect(captured.dialogs.some((item) => item.open)).toBe(true);
+    expect(captured.profile).toBeUndefined();
     await dialog.getByRole('button', { name: '查看相关经历' }).first().click();
     await expect(dialog).not.toBeVisible();
     await expect(page.locator('article.experience.focused')).toHaveCount(1);
     const navigation = page.getByRole('navigation', { name: '行动路径' });
     await expect(navigation.getByRole('button')).toHaveCount(2);
     await navigation.getByRole('button').nth(1).click();
+    await page.locator('article.experience details').first().evaluate((element) => { element.open = true; });
+    await page.evaluate(() => window.scrollTo(0, 650));
+    const position = await page.evaluate(() => window.scrollY);
+    await page.getByRole('button', { name: '保存诊断快照', exact: true }).click();
+    await expect.poll(() => captured.scroll.y).toBe(position);
+    expect(captured.selectedPathId).toBe(result.paths[1].id);
+    expect(captured.details.some((item) => item.open)).toBe(true);
+    await page.screenshot({ path: info.outputPath('diagnostic-snapshot.png') });
+    await page.locator('article.experience details').first().evaluate((element) => { element.open = false; });
     const card = page.locator('article.experience');
     await expect(card).toHaveCount(1);
     await expect(card.getByRole('heading', { name: second.title })).toBeVisible();

@@ -222,7 +222,7 @@ test('all retained sources are passed to analysis', async () => {
   let prompt = '';
   await analyze(sources, profile, () => {}, {
     ask: async (value) => {
-      prompt = value;
+      if (!prompt) prompt = value;
       return {
         value: { paths: [], insights: [], questions: [] },
         metadata: { provider: 'test', model: 'test' },
@@ -231,7 +231,7 @@ test('all retained sources are passed to analysis', async () => {
   });
   assert.match(prompt, /"id":"S1"/);
   assert.match(prompt, /"id":"S100"/);
-  assert.match(prompt, /详细案例总共最多8个，每条路径最多2个/);
+  assert.match(prompt, /详细案例总共最多8个，同一路径可以容纳全部8个/);
   assert.match(prompt, /title仅用于定位主题，不能作为事实证据/);
   assert.match(prompt, /excerpts是搜索摘要而非全文/);
 });

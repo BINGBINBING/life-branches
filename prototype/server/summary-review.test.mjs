@@ -90,6 +90,8 @@ test('unsupported hard facts cannot reach the reviewer even when it would approv
     ['已成功入职', '我完成了一个项目'],
     ['已就业', '我还没就业'],
     ['转专业获批', '申请转专业后毕业'],
+    ['申请降转并参加考核', '大二转入电气专业'],
+    ['通过笔试面试转入', '转入了数学专业'],
   ]) assert.equal(summaryHasSupport(summary, quote), false, summary);
   const { result, raw } = fixture();
   raw.paths[0].cases[0].action.text = '已成功入职';

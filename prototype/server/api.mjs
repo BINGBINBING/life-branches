@@ -1,11 +1,14 @@
 import { randomUUID, randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import { createPrivateResearchStore } from './private-research-store.mjs';
 import { conditionHistory } from './condition-history.mjs';
+import { saveDiagnosticSnapshot } from './diagnostic-snapshot.mjs';
+import { reanalysisSources } from './reanalysis-sources.mjs';
 import { createUsageGate } from './usage-gate.mjs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   rematchAnalysis,
+  analyze,
   validProfile,
   validateAnalysis,
   setTempCredential,
@@ -78,11 +81,11 @@ const send = (res, status, data) => {
   res.end(JSON.stringify(data));
 };
 
-async function body(req) {
+async function body(req, limit = 16000) {
   let text = '';
   for await (const chunk of req) {
     text += chunk;
-    if (text.length > 16000) throw new Error('输入内容过长。');
+    if (text.length > limit) throw new Error('输入内容过长。');
   }
   try {
     return JSON.parse(text);
@@ -111,6 +114,13 @@ export function localApi(options = {}) {
           const origin = req.headers.origin;
           if (origin && new URL(origin).host !== req.headers.host)
             return send(res, 403, { error: '不支持跨站请求。' });
+          if (req.method === 'POST' && url.pathname === '/api/branches/diagnostic-snapshot') {
+            if (!developerToolsAllowed(req, runtimeEnv)) return send(res, 403, { error: '诊断快照仅限本地开发使用。' });
+            if (!req.headers['content-type']?.startsWith('application/json')) return send(res, 415, { error: '需要 JSON 格式。' });
+            try {
+              return send(res, 200, await saveDiagnosticSnapshot(await body(req, 512000), options.diagnosticDirectory));
+            } catch { return send(res, 400, { error: '快照保存失败，请重试。' }); }
+          }
           let owner = 'local-development';
           if (production) {
             let token = String(req.headers.cookie || '').match(/(?:^|;\s*)__Host-life-branches=([a-f0-9]{64})(?:;|$)/)?.[1];
@@ -201,7 +211,7 @@ export function localApi(options = {}) {
               return send(
                 res,
                 200,
-                createLocalIntakePlan(input?.question, input.decisionPath),
+                createLocalIntakePlan(input?.question, input.decisionPath, input.previous),
               );
             if (intakeActive >= 2)
               return send(res, 429, {
@@ -406,6 +416,24 @@ export function localApi(options = {}) {
                 recent: [...feedback].reverse().slice(0, 50),
               },
             });
+          }
+          if (req.method === 'POST' && url.pathname === '/api/branches/reanalyze') {
+            if (!developerToolsAllowed(req, runtimeEnv)) return send(res, 403, { error: '来源恢复分析目前仅限本地开发使用。' });
+            if (!String(req.headers['content-type']).startsWith('application/json')) return send(res, 415, { error: '需要 JSON 格式。' });
+            if (active >= 2) return send(res, 429, { error: '已有分析进行中，请稍后重试。' });
+            const input = await body(req, 4 * 1024 * 1024);
+            const profile = validProfile(input.profile);
+            const sources = reanalysisSources(input.sources);
+            active++;
+            try {
+              const result = await (options.analyze || analyze)(sources, profile, () => {});
+              const restored = { id: randomUUID(), owner, createdAt: Date.now(), profile, sources, result, status: 'done', reused: true,
+                metrics: { searchCalls: 0, cacheHits: 0, stages: [] } };
+              for (const [id, entry] of jobs) if (Date.now() - entry.createdAt > 3600000) jobs.delete(id);
+              if (jobs.size >= 30) jobs.delete(jobs.keys().next().value);
+              jobs.set(restored.id, restored);
+              return send(res, 200, restored);
+            } finally { active--; }
           }
           if (req.method !== 'POST' || url.pathname !== '/api/branches/explore')
             return send(res, 404, { error: '未找到请求。' });

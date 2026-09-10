@@ -6,6 +6,35 @@ import {
   normalizeIntake,
 } from './intake.mjs';
 
+const detailedMajorInput = '我现在就读于北湾大学金融学专业，大三第 6 学期，GPA 3.71/4.0，目标专业是心理学，也考虑认知科学或 HCI 相关方向。目前主要考虑校内跨学院转入心理学、保留金融主修并辅修心理学，或者本科毕业后申请心理学硕士。心理学专业要求至少完成心理学导论、统计学和研究方法三门课程，GPA 不低于 3.50；我目前已经修完心理学导论和统计学，研究方法尚未完成。如果直接转专业，预计会延后毕业约 9 个月；如果选择辅修，则预计不会延毕。适用年份为 2026—2027 学年。';
+
+test('detailed major input preserves explicit background, completed courses and scoped cost', () => {
+  const plan = createLocalIntakePlan(detailedMajorInput, 'campus_transfer');
+  const fields = Object.fromEntries(plan.fields.map((field) => [field.id, field]));
+  for (const [id, value] of Object.entries({ institution_name: '北湾大学', current_major: '金融学', target_major: '心理学', prerequisite_courses: '心理学导论和统计学', graduation_delay: '9个月', policy_year: '2026—2027', gpa_value: '3.71' })) {
+    assert.equal(fields[id]?.initialValue, value, id);
+    assert.ok(detailedMajorInput.includes(fields[id].initialQuote));
+  }
+  assert.equal(fields.policy_year.answerType, 'text');
+  assert.ok(!fields.prerequisite_courses.initialValue.includes('研究方法'));
+  assert.ok(!createLocalIntakePlan(detailedMajorInput, 'minor').fields.some((field) => field.id === 'graduation_delay'));
+});
+
+test('route changes preserve quoted AI fields and reject fabricated carryover', () => {
+  const question = '我想转专业，我的学校是北湾大学，当前专业是金融学';
+  const plan = createLocalIntakePlan(question, 'campus_transfer', { extracted: [
+    { conditionId: 'institution_name', value: '北湾大学', quote: '我的学校是北湾大学' },
+    { conditionId: 'current_major', value: '医学', quote: '我的学校是北湾大学' },
+  ] });
+  assert.equal(plan.fields.find((field) => field.id === 'institution_name').initialValue, '北湾大学');
+  assert.equal(plan.fields.find((field) => field.id === 'current_major').initialValue, undefined);
+});
+
+test('normalized typed values do not require literal substring but still require equal meaning', () => {
+  const result = normalizeIntake('我想转专业，现在第 6 学期', { extracted: [{ conditionId: 'current_term', value: '6学期', quote: '现在第 6 学期' }] });
+  assert.ok(result.fields.find((field) => field.id === 'current_term').initialValue);
+});
+
 test('pre-search intake stays inside the supported decision scopes', () => {
   assert.equal(normalizeIntake('想出国读硕士').supported, false);
   assert.equal(

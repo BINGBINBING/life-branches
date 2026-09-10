@@ -158,10 +158,12 @@ test('A10 empty sources make zero calls, failure makes one call without retry', 
 });
 test('A09/A10 reuses sources and rematches locally without changing accepted cases', async () => {
   let calls = 0;
+  const reviewedRaw = structuredClone(raw);
+  reviewedRaw.paths[0].cases[0].action.text = '完成练习用的项目';
   const options = {
     ask: async () => {
       calls++;
-      return { value: raw, metadata: { provider: 'test' } };
+      return { value: calls === 1 ? reviewedRaw : { reviews: [{ id: 'S1:action', supported: true, contentType: 'actual_action' }] }, metadata: { provider: 'test' } };
     },
   };
   const two = await analyze([source], profile, () => {}, options);
@@ -177,5 +179,5 @@ test('A09/A10 reuses sources and rematches locally without changing accepted cas
   assert.equal(eight.analysis.calls, 0);
   assert.equal(eight.paths[0].cases.length, two.paths[0].cases.length);
   assert.equal(eight.analysis.budget.retries, 0);
-  assert.equal(eight.ruleVersion, 'evidence-4-ds-content');
+  assert.equal(eight.ruleVersion, 'evidence-6-path-evidence');
 });

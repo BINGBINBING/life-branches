@@ -1,6 +1,38 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { deepseekJSON, requiredQuotaIds } from './deepseek.mjs';
+import { deepseekJSON, requiredQuotaIds, parseModelJSON } from './deepseek.mjs';
+
+test('only harmless outer wrappers are normalized, broken JSON is not guessed', () => {
+  assert.deepEqual(parseModelJSON('\uFEFF```json\n{"ok":true}\n```'), { ok: true });
+  assert.throws(() => parseModelJSON('explanation {"ok":true}'));
+  assert.throws(() => parseModelJSON('{"ok":true,}'));
+});
+
+test('one explicit repair accounts for both calls and keeps diagnostics content-free', async () => {
+  let calls = 0;
+  const records = [];
+  const result = await deepseekJSON('test', { key: 'test-only', repairJson: true,
+    onDiagnostic: async (record) => records.push(record),
+    fetcher: async () => ++calls === 1 ? ok('{"secret":"PRIVATE",}') : ok('{"secret":"PRIVATE"}'),
+  });
+  assert.equal(calls, 2);
+  assert.equal(result.metadata.extraCalls, 1);
+  assert.equal(result.metadata.usage.prompt_tokens, 20);
+  assert.equal(JSON.stringify(records).includes('PRIVATE'), false);
+});
+
+test('failed format repair never loops and output truncation never triggers repair', async () => {
+  let calls = 0;
+  await assert.rejects(deepseekJSON('test', { key: 'test-only', repairJson: true,
+    fetcher: async () => { calls++; return ok('broken'); },
+  }), /一次格式修复/);
+  assert.equal(calls, 2);
+  calls = 0;
+  await assert.rejects(deepseekJSON('test', { key: 'test-only', repairJson: true,
+    fetcher: async () => { calls++; return ok('{', 'length'); },
+  }), /未完整结束/);
+  assert.equal(calls, 1);
+});
 
 const ok = (content = '{"ok":true}', finish = 'stop') =>
   new Response(
@@ -9,6 +41,14 @@ const ok = (content = '{"ok":true}', finish = 'stop') =>
       usage: { prompt_tokens: 10, completion_tokens: 5 },
     }),
   );
+test('extraction output allowance is configurable and capped independently of review defaults', async () => {
+  for (const [maxTokens, expected] of [[undefined, 6000], [12000, 12000], [99999, 12000], [-1, 6000]]) {
+    await deepseekJSON('test', { key: 'test-only', maxTokens, fetcher: async (_url, init) => {
+      assert.equal(JSON.parse(init.body).max_tokens, expected);
+      return ok();
+    } });
+  }
+});
 test('DeepSeek request is bounded and structured, returns usage without credentials', async () => {
   const result = await deepseekJSON('JSON test', {
     key: 'test-only',

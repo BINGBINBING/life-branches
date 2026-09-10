@@ -1,9 +1,9 @@
 import { researchReadiness } from './research-readiness.mjs';
 
 export const SEARCH_ROUNDS = [
-  { layer: 'hard_path', purpose: '行动路径与硬条件' },
+  { layer: 'hard_path', purpose: '具体转换方向，不混入学校或行业限制' },
   { layer: 'adaptive_gap', purpose: '根据首轮缺口补充' },
-  { layer: 'outcome', purpose: '阶段结果' },
+  { layer: 'outcome', purpose: '独立检索学校条件或行业招聘背景' },
   { layer: 'constraints', purpose: '限制与成本' },
   { layer: 'retrospective', purpose: '后续回顾' },
 ];

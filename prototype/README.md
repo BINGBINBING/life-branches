@@ -44,7 +44,11 @@ npm start
 
 分析已统一由 DeepSeek 完成,**知乎直答已弃用**——无需再配置 `ANALYSIS_PROVIDER`,知乎仅用于真实经历检索。服务不会在失败时自动切换供应商或重试收费调用。配置修改后须重启本地服务。
 
-分析只检查所需的知乎搜索额度,复用来源重新分析不依赖知乎额度。请求固定发往 DeepSeek 官方 API,90 秒截止、最多 6000 输出 tokens;拒绝空内容、非 JSON、截断结果和无效引用。合法 JSON 与有效引用都不等于语义准确。
+分析只检查所需的知乎搜索额度,复用来源重新分析不依赖知乎额度。请求固定发往 DeepSeek 官方 API,单次90秒截止；案例抽取最多12000输出tokens，审核默认6000。拒绝空内容、非JSON、截断结果和无效引用。合法JSON与有效引用都不等于语义准确。
+
+案例召回：逐来源给出模型筛选理由，详细案例合计最多8个，不限制每条路径最多2个；引用使用明确标注的片段编号，由服务端取回原文。行动总结未通过审核的内容不计作入选经历。非重复来源至少8个且审核后仅剩0–1例时，复用未入选来源进行一次聚焦补查及审核，不新增知乎搜索；含搜索中途检查点最多5次模型调用，不无限补查。规则版本为`evidence-5-case-recall`，旧页面结果需要“复用来源重新分析”才能应用新规则。
+
+检索拆分（2026-09-10）：首轮只组合所选路径与专业/岗位转换方向，不将学校、行业、绩点和个人时间一并作为约束。目标专业/岗位、学校条件或行业招聘、准备成本、适应回顾分别检索，最多5轮且单轮最多10条。首轮不足3个非重复来源时去掉起点条件；目标专业/岗位相关片段占比不足40%时采用目标主题查询，不以学校名称出现代替专业相关。关键词命中仅用于调整查询，不代表语义相关性或事实可靠性。学校查询返回的知乎材料不是官方资格依据。新查询会使用新缓存键；旧研究必须重新搜索，单击“复用来源重新分析”不会更新来源集合。
 
 `node server/verify-deepseek.mjs` 使用既有公开片段和虚构用户做三次分析，不消耗知乎搜索额度，但会产生 DeepSeek 费用。结果只写入忽略的 `.local/deepseek-verification`。默认离线测试不调用外部模型。历史演示不会被测试结果自动替换。
 
@@ -164,3 +168,23 @@ records without this review marker are not upgraded automatically: start a new
 research run to generate the new summaries. This avoids silently charging for
 opening history. Local rematching remains zero external calls. The rule version
 is `evidence-4-ds-content`; model review is not verification of real-world truth.
+
+## Local Diagnostic Snapshot
+
+The bottom-right camera button saves UI metadata to `.local/diagnostics/latest.json`
+relative to the prototype server working directory. It also works inside dialogs.
+Each click replaces the previous snapshot. Metadata includes research and saved
+record IDs, selected branch, result filter, focused/visible cases, expanded evidence,
+open dialogs, viewport and scroll offsets. It does not include form text, source
+content, cookies, browser storage or credentials. This is a locator, not a research
+backup or automatic replay. Reopening expired jobs still requires saved research.
+
+The endpoint is disabled in production and rejects non-local hosts and cross-site
+requests. Files are owner-readable/writable only; `.local/` is Git-ignored. No
+external API is called and no snapshot is uploaded to GitHub. To debug, click the
+camera on the relevant view, then ask the assistant to read the latest local snapshot.
+# 路径证据输出（2026-09-10 本地更新）
+
+新研究使用 `evidence-6-path-evidence`：DS 先从来源中生成 `evidencePaths`，按行动、建议、条件、成本、结果、政策转述、统计分类。不要求每个来源构成完整案例；归纳通过片段引用校验和独立模型复核后才展示，个人经历保留为辅助详情。
+
+旧研究需点击“复用来源重新分析”才能采用新结构，不自动消耗额度。主分析格式失败最多修复一次；最大分析预算为7次，计入检索检查点、路径审核、低召回补查与格式修复。失败保留已有经历与原始来源；不将未经审核的摘抄回填为总结。政策需另行官方核实，模型复核不保证事实真实或路径分类完全正确。

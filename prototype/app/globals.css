@@ -2076,3 +2076,37 @@ label {
   color: var(--red);
   background: #fdf1f1;
 }
+.diagnostic-capture {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 32px);
+}
+.diagnostic-capture button {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid #cad6cf;
+  border-radius: 8px;
+  background: white;
+  color: #24654f;
+  box-shadow: 0 2px 8px #0002;
+  cursor: pointer;
+}
+.diagnostic-capture output {
+  background: white;
+  color: #24654f;
+  padding: 6px 10px;
+  font-size: 14px;
+}
+.path-evidence { margin-block: 24px; }
+.evidence-group { padding-block: 18px; border-top: 1px solid #dce3df; }
+.evidence-group h3 { margin-bottom: 12px; }
+.evidence-item { padding-block: 12px; overflow-wrap: anywhere; }
+.evidence-item p { margin-block: 8px; }

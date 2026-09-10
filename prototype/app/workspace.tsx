@@ -28,6 +28,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { DiagnosticCapture } from './diagnostic-capture';
 import type {
   Experience,
   Fact,
@@ -113,7 +114,14 @@ function Evidence({ value }: { value: Fact | null }) {
   return (
     <>
       <p>{value.verification === 'model-reviewed' && value.semanticReviewVersion === 'ds-content-1' ? value.text : '暂未形成可靠归纳'}</p>
-      <p className="meta">{value.verification === 'model-reviewed' && value.semanticReviewVersion === 'ds-content-1' ? 'AI 总结，已通过模型证据复核，仍需人工判断' : '原始材料仅供核对，不作为本栏结论。旧记录需重新发起研究才能生成新归纳。'}</p>
+      <p className="meta">{value.verification === 'model-reviewed' && value.semanticReviewVersion === 'ds-content-1' ? 'AI 总结，已通过模型证据复核，仍需人工判断' : ({
+        missing_summary: '模型未提供本栏总结，原文仅供核对。',
+        verbatim: '模型返回了原文摘抄，未作为总结展示。',
+        unsupported: '总结未通过事实一致性检查，原文仅供核对。',
+        rejected: '总结的证据支持或内容分类未通过模型复核。',
+        invalid_review: '模型复核返回格式异常，可复用来源重新分析。',
+        review_failed: '模型复核调用失败，可复用来源重新分析。',
+      } as Record<string, string>)[value.reviewStatus || ''] || '此记录缺少有效总结复核标记，原因未记录。可复用来源重新分析。'}</p>
       <details className="quote-details">
         <summary>
           查看依据 <ChevronDown size={13} />
@@ -961,6 +969,7 @@ export default function Workspace() {
   const [starterText, setStarterText] = useState('');
   const [job, setJob] = useState<Job | null>(null);
   const [busy, setBusy] = useState(false);
+  const [reanalyzing, setReanalyzing] = useState(false);
   const [error, setError] = useState('');
   const [pathId, setPathId] = useState('');
   const [filter, setFilter] = useState('all');
@@ -1246,7 +1255,10 @@ export default function Workspace() {
       const plan = await request<IntakePlan>('/api/branches/intake', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: profile.question, decisionPath }),
+        body: JSON.stringify({ question: profile.question, decisionPath, previous: {
+          fieldIds: intake?.fields.map((field) => field.id) || [],
+          extracted: intake?.fields.filter((field) => field.initialQuote && field.initialValue).map((field) => ({ conditionId: field.id, value: field.initialValue, quote: field.initialQuote })) || [],
+        } }),
       });
       const allowed = new Set(plan.fields.map((field) => field.id));
       const conditionAnswers = Object.fromEntries(
@@ -1460,8 +1472,32 @@ export default function Workspace() {
     setShowHistory(false);
   }
 
+  async function reanalyzeCurrent() {
+    if (!job?.sources.length || activeRequest.current) return;
+    const current = job;
+    activeRequest.current = true;
+    setReanalyzing(true);
+    setBusy(true);
+    setError('');
+    try {
+      const updated = await request<Job>('/api/branches/reanalyze', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profile, sources: current.sources.map(({ id, url, title, author, badge, snippets }) => ({ id, url, title, author, badge, snippets })) }),
+      });
+      const next = { ...current, ...updated };
+      setJob(next);
+      rememberJob(next);
+      setSavedRecordId('');
+      setPathId(updated.result?.paths[0]?.id || '');
+      setFilter('all');
+      setFocus('');
+    } catch { setError('重新分析失败，原结果已保留，请稍后重试。'); }
+    finally { activeRequest.current = false; setReanalyzing(false); setBusy(false); }
+  }
+
   return (
     <div className="app-shell">
+      {availability?.developerTools && <DiagnosticCapture state={{ researchId: job?.id || '', savedRecordId, selectedPathId: path?.id || '', focusedCaseId: focus, filter, step }} />}
       <header className="topbar">
         <div className="brand">
           <GitBranch size={26} />
@@ -1914,10 +1950,17 @@ export default function Workspace() {
               </button>
             )}
             <div className="condition-line">
+              {availability?.developerTools && Boolean(job?.sources.length) && <span>
+                <button type="button" disabled={busy || reanalyzing} onClick={() => void reanalyzeCurrent()}>
+                  {reanalyzing ? <LoaderCircle size={16} /> : <ArrowRight size={16} />}
+                  {reanalyzing ? '正在重新分析…' : '复用来源重新分析'}
+                </button>
+                <small>调用 DeepSeek，不重新搜索知乎</small>
+              </span>}
               {[
-                ['背景', profile.background],
-                ['投入', profile.time],
-                ['目标', profile.goal],
+                ['背景', profile.background || [profile.conditionAnswers?.institution_name, profile.conditionAnswers?.current_major, profile.conditionAnswers?.current_stage].filter(Boolean).join(' · ')],
+                ['投入', profile.time || profile.conditionAnswers?.daily_time],
+                ['目标', profile.goal || profile.conditionAnswers?.target_major || profile.conditionAnswers?.target_role],
               ].map(([label, value]) => (
                 <span key={label}>
                   <b>{label}</b>
@@ -2011,6 +2054,7 @@ export default function Workspace() {
                 <section aria-label="研究覆盖范围">
                   <h2>本次研究覆盖</h2>
                   <p>{job.result.coverage.sourceCount} 个来源 · {job.result.coverage.duplicateCount} 个重复来源 · {job.result.coverage.acceptedCount} 个入选案例 · {job.result.coverage.pathCount} 条行动路径</p>
+                  {job.result.evidenceCoverage && <p>{job.result.evidenceCoverage.sourceCount} 个来源贡献了 {job.result.evidenceCoverage.itemCount} 条分类依据（不以完整案例为前提）</p>}
                   {job.result.coverage.gaps.map((gap) => <p className="meta" key={gap}>{gap}</p>)}
                   <p className="meta">这些只是当前检索样本，未找到不代表不存在，数量不能用于推算成功率。</p>
                 </section>
@@ -2076,7 +2120,7 @@ export default function Workspace() {
                             </span>
                             <strong>{p.name}</strong>
                             <small>
-                              {p.cases.length} 段经历 ·{' '}
+                              {p.evidence?.length ? `${p.evidence.length} 条路径依据 · ` : ''}{p.cases.length} 段经历 ·{' '}
                               {
                                 p.cases.filter((c) => c.result === 'success')
                                   .length
@@ -2091,7 +2135,7 @@ export default function Workspace() {
                     <div className="sidebar-note">
                       <ShieldCheck size={17} />
                       <p>
-                        路径来自检索到的经历。
+                        路径依据来自经历、建议及政策转述等内容。
                         <br />
                         个人自述尚未经独立核实。
                         <br />
@@ -2107,6 +2151,33 @@ export default function Workspace() {
                       </div>
                       <span className="meta">{cases.length} 段经历</span>
                     </div>
+                    {job?.result?.outputMode === 'path-evidence-1' && (
+                      <section className="path-evidence">
+                        <p className="meta">{job.result.evidenceCoverage?.sourceCount || 0} 个来源贡献路径信息 · 建议不等于已验证效果，政策转述需向学校或单位核实。</p>
+                        <p className="meta">不同路径可能是延伸选项，不代表目标或申请资格相同；不同来源的行动与结果不构成同一人的连续经历。</p>
+                        {!path?.evidence?.length && <p className="muted">{job.result.pathEvidenceStatus === 'failed' ? '路径证据整理暂时失败，可复用现有来源重新分析。' : '这条路径暂未形成通过复核的分类依据，已保留相关经历。'}</p>}
+                        {([
+                          ['action', '已发生的行动'], ['advice', '可考虑的做法'],
+                          ['condition', '适用条件'], ['cost', '成本与障碍'],
+                          ['outcome', '来源报告的不同结果'], ['policy', '政策与要求转述'],
+                          ['statistic', '统计与背景参考'],
+                        ] as const).map(([type, label]) => {
+                          const items = (path?.evidence || []).filter((item) => item.type === type);
+                          return items.length ? <section key={type} className="evidence-group">
+                            <h3>{label}</h3>
+                            {items.map((item) => <div key={item.id} className="evidence-item">
+                              <p>{item.text}</p>
+                              <p className="meta">涉及对象：{item.subject} · 适用范围：{item.scope}</p>
+                              <details className="quote-details">
+                                <summary>查看依据 <ChevronDown size={13} /></summary>
+                                <blockquote>{item.quote}</blockquote>
+                                {sourceMap.get(item.sourceId) && <a href={sourceMap.get(item.sourceId)!.url} target="_blank" rel="noreferrer">{sourceMap.get(item.sourceId)!.title} <ArrowUpRight size={13} /></a>}
+                              </details>
+                            </div>)}
+                          </section> : null;
+                        })}
+                      </section>
+                    )}
                     {job?.result?.jobRequirementAssessment?.sampleCount ? (
                       <section className="job-requirements">
                         <div>
@@ -2183,7 +2254,7 @@ export default function Workspace() {
                         </p>
                       </section>
                     )}
-                    <div className="insight-grid">
+                    {job?.result?.outputMode !== 'path-evidence-1' && <div className="insight-grid">
                       {(['practice', 'risk'] as const).map((type) => (
                         <section key={type}>
                           <h3>
@@ -2234,9 +2305,10 @@ export default function Workspace() {
                         </section>
                       ))}
                     </div>
+                    }
                     <section className="cases-section">
                       <div className="cases-heading">
-                        <h3>经验对照</h3>
+                        <h3>相关经历详情</h3>
                         <span className="meta">
                           以下为当前路径的样本数量，每段经历计一次，不能用于推算成功率。
                         </span>
@@ -2530,7 +2602,7 @@ export default function Workspace() {
                           <h3>{s.title}</h3>
                           <SourceLink source={s} />
                         </div>
-                        <p className="meta">{job?.result?.sourceDispositions?.find((item) => item.sourceId === s.id)?.reason || '来源去向未记录'}</p>
+                        <p className="meta">{job?.result?.sourceDispositions?.find((item) => item.sourceId === s.id)?.contributesEvidence ? '已贡献路径依据。' : ''}{job?.result?.sourceDispositions?.find((item) => item.sourceId === s.id)?.reason || '来源去向未记录'}</p>
                         <p className="meta">
                           仅摘要 ·{' '}
                           {s.author} ·{' '}

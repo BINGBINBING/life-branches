@@ -1,7 +1,8 @@
-export const RULE_VERSION = 'evidence-4-ds-content';
+export const RULE_VERSION = 'evidence-6-path-evidence';
 export const CALL_BUDGET = Object.freeze({
   intake: 1,
-  analysis: 3,
+  // Main extraction + two reviews + two recovery calls + checkpoint + one format repair.
+  analysis: 7,
   retries: 0,
   search: 5,
 });

@@ -6,7 +6,7 @@ import { SEARCH_CALL_LIMIT } from './engine.mjs';
 test('each budgeted search round has a distinct purpose and metric layer', () => {
   assert.equal(SEARCH_ROUNDS.length, SEARCH_CALL_LIMIT);
   assert.equal(new Set(SEARCH_ROUNDS.map((round) => round.layer)).size, SEARCH_CALL_LIMIT);
-  assert.deepEqual(SEARCH_ROUNDS.map((round) => round.purpose), ['行动路径与硬条件', '根据首轮缺口补充', '阶段结果', '限制与成本', '后续回顾']);
+  assert.deepEqual(SEARCH_ROUNDS.map((round) => round.purpose), ['具体转换方向，不混入学校或行业限制', '根据首轮缺口补充', '独立检索学校条件或行业招聘背景', '限制与成本', '后续回顾']);
 });
 
 test('search requires two stalled rounds and never exceeds the maximum', () => {

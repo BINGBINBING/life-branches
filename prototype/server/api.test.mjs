@@ -29,6 +29,53 @@ function createHandler(options = {}) {
 
 const handler = createHandler();
 
+test('all planned and adaptive queries exclude narrative instructions and calendar years', () => {
+  for (const scope of ['major_transition', 'career_transition']) {
+    const profile = { decisionScope: scope, decisionPath: scope === 'major_transition' ? 'campus_transfer' : 'career_change', conditionAnswers: {
+      institution_name: '北湾大学', current_major: '金融学', target_major: '心理学 2026—2027学年', policy_year: '2026—2027',
+      current_industry: '零售', current_job_function: '运营', target_industry: '软件2026年', target_job_function: '开发',
+    } };
+    const queries = [...searchQueries(profile), ...[[], Array(4).fill({ title: '无关', snippets: ['其他内容'] }), Array(4).fill({ title: '北湾大学 软件2026年', snippets: ['心理学'] })].map((sources) => adaptiveFollowupQuery(profile, sources))];
+    for (const query of queries) {
+      assert.doesNotMatch(query, /亲身|行动|结果|2026|2027|学年/);
+      assert.equal(query.split(' ').length, new Set(query.split(' ')).size);
+    }
+    assert.equal(profile.conditionAnswers.policy_year, '2026—2027');
+  }
+});
+
+test('local reanalysis restores expired browser sources without searching', async () => {
+  let calls = 0;
+  const target = createHandler({ analyze: async (sources) => { calls++; assert.equal(sources[0].secret, undefined); return { paths: [], insights: [], questions: [] }; } });
+  const payload = { profile: { question: '我想从机械转专业到计算机' }, sources: [{ id: 'S1', url: 'https://www.zhihu.com/question/1', snippets: ['虚构测试片段'], secret: 'not-forwarded' }] };
+  const response = await call('/api/branches/reanalyze', 'POST', payload, 'http://localhost:4317', target);
+  assert.equal(response.status, 200);
+  assert.equal(response.value.metrics.searchCalls, 0);
+  assert.equal(calls, 1);
+  assert.equal((await call(`/api/branches/jobs/${response.value.id}`, 'GET', {}, 'http://localhost:4317', target)).status, 200);
+  assert.equal((await call('/api/branches/reanalyze', 'POST', payload, 'https://public.test', target, 'public.test')).status, 403);
+});
+
+test('diagnostic snapshots deny public hosts, production and cross-site requests', async () => {
+  const endpoint = '/api/branches/diagnostic-snapshot';
+  assert.equal((await call(endpoint, 'POST', {}, 'https://example.test', handler, 'example.test')).status, 403);
+  assert.equal((await call(endpoint, 'POST', {}, 'http://evil.test')).status, 403);
+  assert.equal((await call(endpoint, 'POST', {}, 'http://localhost:4317', createHandler({ env: { NODE_ENV: 'production' } }))).status, 403);
+});
+
+test('diagnostic endpoint persists only requested metadata', async () => {
+  const { mkdtemp, readFile, rm } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const directory = await mkdtemp(join(tmpdir(), 'diagnostics-api-'));
+  try {
+    const result = await call('/api/branches/diagnostic-snapshot', 'POST', { researchId: 'job-1', apiKey: 'never-store' }, 'http://localhost:4317', createHandler({ diagnosticDirectory: directory }));
+    assert.equal(result.status, 200);
+    const saved = await readFile(join(directory, 'latest.json'), 'utf8');
+    assert.ok(saved.includes('job-1'));
+    assert.ok(!saved.includes('never-store'));
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
 test('production feedback deletion only removes the current session feedback', async () => {
   const { mkdtemp, rm } = await import('node:fs/promises');
   const { tmpdir } = await import('node:os');
@@ -103,7 +150,7 @@ test('archive API opens a readable exploration without remote calls', async () =
   assert.equal(response.value.historical, true);
   assert.equal(response.value.status, 'done');
   assert.ok(response.value.result.paths.length > 0);
-  assert.equal(response.value.result.ruleVersion, 'evidence-4-ds-content');
+  assert.equal(response.value.result.ruleVersion, 'evidence-6-path-evidence');
   assert.ok(
     response.value.result.paths.every((p) =>
       p.cases.every((c) => c.result === 'unknown'),
@@ -296,7 +343,7 @@ test('unknown previous exploration cannot trigger rematching', async () => {
     400,
   );
 });
-test('search separates a focused evidence query from a setback query', () => {
+test('career search separates role direction, industry context and preparation', () => {
   const queries = searchQueries({
     question: '转行开发',
     background: '文科本科',
@@ -311,11 +358,12 @@ test('search separates a focused evidence query from a setback query', () => {
   });
   assert.equal(queries.length, 5);
   assert.match(queries[0], /转行 转岗/);
-  assert.match(queries[0], /零售/);
+  assert.match(queries[0], /从运营转向开发/);
+  assert.doesNotMatch(queries[0], /零售|软件/);
   assert.doesNotMatch(queries[0], /每天两小时/);
-  assert.match(queries[1], /失败 被拒 后悔 复盘/);
-  assert.match(queries[2], /offer 入职/);
-  assert.match(queries[3], /作品 面试 招聘要求/);
+  assert.match(queries[1], /开发 入门/);
+  assert.match(queries[2], /零售 转 软件 转行 招聘/);
+  assert.match(queries[3], /作品 面试/);
   assert.match(queries[4], /薪资 空窗/);
 });
 
@@ -335,7 +383,8 @@ test('search queries exclude the full personal narrative and stay concise', () =
   assert.ok(queries.every((query) => query.length < 260));
   assert.ok(queries.every((query) => !query.includes('没有告诉家人')));
   assert.ok(queries.every((query) => !query.includes(privateNarrative)));
-  assert.match(queries[0], /零售/);
+  assert.doesNotMatch(queries[0], /零售/);
+  assert.match(queries[2], /零售/);
   assert.match(queries[0], /开发/);
 });
 
@@ -344,7 +393,7 @@ test('incomplete industry classification never leaks internal status into search
     current_job_function: '运营', target_job_function: '软件开发',
   } });
   for (const query of queries) {
-    assert.match(query, /转行 转岗 从运营转向软件开发/);
+    assert.match(query, /软件开发/);
     assert.doesNotMatch(query, /待确认|当前岗位职能|目标岗位职能|行业与职能变化/);
   }
 });
@@ -376,17 +425,18 @@ test('second search broadens low recall and tightens noisy recall', () => {
       target_job_function: '开发',
     },
   };
-  assert.match(adaptiveFollowupQuery(profile, []), /经历 结果 复盘/);
+  assert.match(adaptiveFollowupQuery(profile, []), /开发 入门/);
+  assert.doesNotMatch(adaptiveFollowupQuery(profile, []), /申请条件|失败|被拒/);
   const noisy = Array.from({ length: 5 }, (_, index) => ({
     title: `无关经历${index}`,
     snippets: ['没有目标岗位信息'],
   }));
   const narrowed = adaptiveFollowupQuery(profile, noisy);
-  assert.match(narrowed, /软件 开发/);
-  assert.match(narrowed, /亲身 失败 结果/);
+  assert.match(narrowed, /开发/);
+  assert.match(narrowed, /岗位/);
 });
 
-test('healthy recall adds controlled expansion terms to the gap query', () => {
+test('healthy recall explores adaptation without piling personal constraints into queries', () => {
   const profile = {
     question: '从运营转行开发',
     decisionScope: 'career_transition',
@@ -403,9 +453,8 @@ test('healthy recall adds controlled expansion terms to the gap query', () => {
     snippets: ['从其他行业转行软件开发'],
   }));
   const query = adaptiveFollowupQuery(profile, focused);
-  assert.match(query, /作品 项目/);
-  assert.match(query, /在职准备/);
-  assert.match(query, /失败 被拒 后悔 复盘/);
+  assert.match(query, /适应/);
+  assert.doesNotMatch(query, /作品 项目|在职准备|失败 被拒/);
 });
 
 test('missing core fields force general research mode', () => {

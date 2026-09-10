@@ -78,7 +78,7 @@ export type OfficialCheck = {
   policyYears?: string[];
   applicableYear?: string;
 };
-export type Fact = { text: string; quote: string; summary?: string; verification?: string; semanticReviewVersion?: string };
+export type Fact = { text: string; quote: string; summary?: string; verification?: string; semanticReviewVersion?: string; reviewStatus?: string };
 export type ConditionComparison = {
   conditionId: string;
   label: string;
@@ -117,6 +117,7 @@ export type Experience = {
   missing: string[];
 };
 export type Path = {
+  evidence?: { id: string; sourceId: string; type: 'action' | 'advice' | 'condition' | 'cost' | 'outcome' | 'policy' | 'statistic'; text: string; quote: string; subject: string; scope: string }[];
   decisionRoute?: string;
   actionBranch?: string;
   id: string;
@@ -148,8 +149,11 @@ export type Question = {
   options: string[];
 };
 export type Analysis = {
+  outputMode?: 'path-evidence-1';
+  pathEvidenceStatus?: string;
+  evidenceCoverage?: { sourceCount: number; itemCount: number };
   coverage?: { sourceCount: number; duplicateCount: number; acceptedCount: number; pathCount: number; gaps: string[] };
-  sourceDispositions?: { sourceId: string; accepted: boolean; reason: string }[];
+  sourceDispositions?: { sourceId: string; accepted: boolean; reason: string; contributesEvidence?: boolean }[];
   researchMode?: 'general' | 'personalized';
   missingRequired?: string[];
   paths: Path[];
