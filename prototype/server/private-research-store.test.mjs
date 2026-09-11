@@ -42,8 +42,12 @@ test('private research backup restores retained records and refuses overwrite', 
     db.prepare('UPDATE research SET savedAt=? WHERE id=?').run(Date.now() - 31 * 86400000, expired.id);
     db.close();
     await store.backup(backup);
-    assert.equal(statSync(file).mode & 0o777, 0o600);
-    assert.equal(statSync(backup).mode & 0o777, 0o600);
+    // Windows 没有 POSIX 权限位，statSync().mode 恒为 0o666，chmod 0o600 不会生效，
+    // 因此只在支持权限位的平台上断言。Windows 上的访问控制依赖目录 ACL，不在本用例覆盖范围。
+    if (process.platform !== 'win32') {
+      assert.equal(statSync(file).mode & 0o777, 0o600);
+      assert.equal(statSync(backup).mode & 0o777, 0o600);
+    }
     await assert.rejects(store.backup(backup), { code: 'EEXIST' });
     await store.remove(first.id, 'owner');
     restored = createPrivateResearchStore(backup);

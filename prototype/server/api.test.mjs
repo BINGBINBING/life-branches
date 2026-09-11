@@ -17,13 +17,16 @@ import {
 
 function createHandler(options = {}) {
   let configured;
-  localApi(options).configureServer({
+  const api = localApi(options);
+  api.configureServer({
     middlewares: {
       use(fn) {
         configured = fn;
       },
     },
   });
+  // 暴露 close()，便于使用临时目录的用例先释放 SQLite 句柄再删除文件（Windows 必需）。
+  configured.close = () => api.close();
   return configured;
 }
 
@@ -80,8 +83,8 @@ test('production feedback deletion only removes the current session feedback', a
   const { mkdtemp, rm } = await import('node:fs/promises');
   const { tmpdir } = await import('node:os');
   const directory = await mkdtemp(join(tmpdir(), 'feedback-api-'));
+  const target = createHandler({ env: { NODE_ENV: 'production' }, researchStorePath: join(directory, 'research.sqlite'), budgetPath: join(directory, 'budget.sqlite') });
   try {
-    const target = createHandler({ env: { NODE_ENV: 'production' }, researchStorePath: join(directory, 'research.sqlite'), budgetPath: join(directory, 'budget.sqlite') });
     const a = await call('/api/branches/feedback', 'POST', { rating: 4, comment: '虚构反馈A' }, 'https://example.test', target, 'example.test');
     const b = await call('/api/branches/feedback', 'POST', { rating: 3, comment: '虚构反馈B' }, 'https://example.test', target, 'example.test');
     assert.equal(a.status, 200);
@@ -93,7 +96,7 @@ test('production feedback deletion only removes the current session feedback', a
       assert.equal((await call('/api/branches/feedback', 'DELETE', {}, 'https://example.test', target, 'example.test', cookie)).value.removed, 0);
     }
     assert.equal((await call('/api/branches/feedback', 'DELETE')).status, 409);
-  } finally { await rm(directory, { recursive: true, force: true }); }
+  } finally { target.close(); await rm(directory, { recursive: true, force: true }); }
 });
 async function call(
   url,

@@ -106,6 +106,12 @@ export function localApi(options = {}) {
   };
   return {
     name: 'life-branches-local-api',
+    // 释放本实例打开的 SQLite 句柄。Windows 不允许删除仍被占用的文件，
+    // 测试清理临时目录前必须先关闭，否则会得到 EBUSY。
+    close() {
+      researchStore.close?.();
+      gate.close();
+    },
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url, 'http://localhost');

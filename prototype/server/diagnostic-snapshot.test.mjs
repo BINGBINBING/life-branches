@@ -22,6 +22,7 @@ test('diagnostic snapshot replaces latest locally with private file permissions'
     await saveDiagnosticSnapshot({ researchId: 'second' }, directory);
     assert.equal(JSON.parse(await readFile(join(directory, 'latest.json'), 'utf8')).researchId, 'second');
     assert.deepEqual(await readdir(directory), ['latest.json']);
-    assert.equal((await stat(join(directory, 'latest.json'))).mode & 0o777, 0o600);
+    // Windows 没有 POSIX 权限位，chmod 0o600 不生效，仅在支持的平台上断言。
+    if (process.platform !== 'win32') assert.equal((await stat(join(directory, 'latest.json'))).mode & 0o777, 0o600);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
