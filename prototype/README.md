@@ -13,6 +13,8 @@ npm start
 
 默认访问 http://localhost:4317 。若该端口已占用，使用 `npm run dev -- --host 127.0.0.1 --port 4318`。
 
+`start` / `dev` / `build` / `test` 会先执行 `npm run check-deps`，核对 `node_modules` 是否与 `package.json`、`package-lock.json` 一致。若启动时出现 `ERR_MODULE_NOT_FOUND`（例如 `Cannot find package 'cheerio'`），说明安装树是旧的或不完整的——常见于直接解压了在依赖变更之前打包的 `node_modules`（`node_modules` 不受 Git 管理，不要跨机器复制）。在 `prototype` 目录重新执行 `npm install` 即可恢复；`npm run check-deps` 可随时手动自检。
+
 应用使用当前机器的系统安全凭证库，不需要把密钥复制到代码或前端。CLI 会按平台自动探测官方默认安装位置（Windows：`%LOCALAPPDATA%\ZhihuCLI\current\zhihu-cli.exe`；macOS：`~/Library/Application Support/zhihu-cli/current/zhihu-cli`）；非默认路径可通过 `ZHIHU_CLI_PATH` 指定二进制绝对路径，或设置 `ZHIHU_CLI_HOME` 指向安装根目录。
 
 **生产 / 云端运行**：设置 `ZHIHU_ACCESS_SECRET` 后，知乎检索会走官方 HTTP API 直连（`server/zhihu-http.mjs`），不再需要本机 zhihu-cli，适合云端或无 CLI 环境。生产形态可先 `npm run build`，再 `PORT=8080 node standalone-server.mjs` 在同一端口提供页面与 `/api/branches/*`（详见仓库根 README「生产运行」）。
