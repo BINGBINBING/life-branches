@@ -1669,6 +1669,9 @@ export default function Workspace() {
                     说说你正在考虑的一个转专业或转行业选择。可以一起写下当前情况、目标、可投入时间和不能接受的代价。
                   </p>
                 </div>
+                <p className="meta data-use-notice" id="data-use-notice">
+                  发送后，你的描述会交给 DeepSeek 生成条件表单。确认表单后，描述和部分条件会用于知乎检索，完整条件与检索片段会交给 DeepSeek 分析。
+                </p>
                 <form
                   className="chat-composer"
                   onSubmit={(e) => {
@@ -1680,9 +1683,6 @@ export default function Workspace() {
                   <label className="sr-only" htmlFor="starter-message">
                     描述你正在考虑的选择
                   </label>
-                  <p className="meta" id="data-use-notice">
-                    发送后，你的描述会交给 DeepSeek 生成条件表单。确认表单后，描述和部分条件会用于知乎检索，完整条件与检索片段会交给 DeepSeek 分析。
-                  </p>
                   <textarea
                     id="starter-message"
                     aria-describedby="data-use-notice"

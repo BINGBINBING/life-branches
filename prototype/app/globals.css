@@ -1657,6 +1657,11 @@ label {
   padding-right: 18px;
   text-align: right;
 }
+/* 数据用途说明：位于输入框之外，避免看起来像输入框里预填的内容 */
+.data-use-notice {
+  max-width: 680px;
+  margin: 0 0 10px;
+}
 .chat-composer {
   border: 1px solid #cbd8cf;
   border-radius: 8px;
